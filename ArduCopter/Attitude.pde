@@ -1116,7 +1116,7 @@ static void reset_land_detector()
 static bool update_land_detector()
 {
     // detect whether we have landed by watching for low climb rate and minimum throttle
-    if (abs(climb_rate) < 20 && motors.limit.throttle_lower) {
+    if (climb_rate > -20 && motors.limit.throttle_lower) { // Fix for disarm bug - We can't have positive climb_rate while throttle is 0
         if (!ap.land_complete) {
             // run throttle controller if accel based throttle controller is enabled and active (active means it has been given a target)
             if( land_detector < LAND_DETECTOR_TRIGGER) {
