@@ -159,6 +159,9 @@ static void init_arm_motors()
         init_home();
         calc_distance_and_bearing();
     }
+    
+    // ST-JD Reset Altitude to avoid the "rocket start" in throttle hold mode
+    inertial_nav.set_altitude(baro_alt);
 
     // all I terms are invalid
     // -----------------------
