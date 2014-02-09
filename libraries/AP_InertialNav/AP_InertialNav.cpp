@@ -359,6 +359,7 @@ void AP_InertialNav::set_altitude( float new_altitude)
     _position_base.z = new_altitude;
     _position_correction.z = 0;
     _position.z = new_altitude; // _position = _position_base + _position_correction
+    if( _hist_position_estimate_z.is_full() ) _hist_position_estimate_z.clear(); //ST-JD clear hist otherwise the alt won't be set properly
 }
 
 //
