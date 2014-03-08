@@ -632,7 +632,10 @@ static int16_t brake_max_roll, brake_max_pitch; 	         // used to detect half
 static int16_t loiter_stab_timer;		// loiter stabilization timer: we read pid's I terms in wind_comp only after this time from loiter start
 static float brake_loiter_mix;		    // varies from 0 to 1, allows a smooth loiter engage
 static int8_t  update_wind_offset_timer;	// update wind_offset decimator (10Hz)
-
+static float baro_alt_comp = 0;// Altitude in cm added to baro to compensate disturbance of speed/angle
+#define BARO_COMP_FACTOR 10  // set it as param if working, allows to modulate the effect of this compensation, if set to 0, no comp.
+static int baro_comp_factor = BARO_COMP_FACTOR;
+ 
 ////////////////////////////////////////////////////////////////////////////////
 // CH7 and CH8 save waypoint control
 ////////////////////////////////////////////////////////////////////////////////
@@ -1892,7 +1895,23 @@ void update_roll_pitch_mode(void)
 		}
         get_stabilize_roll(constrain_int16(control_roll,-g.angle_max,g.angle_max));
         get_stabilize_pitch(constrain_int16(control_pitch,-g.angle_max,g.angle_max));
-		break;
+		
+        //ST-JD Baro fix - to be moved elsewhere if working
+        //TO-DO compute only every 150ms as the baro updates each 150ms - how to sync with baro update for better compensation, to compensate at right time?
+        
+        if (baro_comp_factor != 0){
+            // compute the altitue error due to dynamic pressure
+            // 5.1=0.5*1.2(density of air in kg/m3)*8.5(atmosphere bar level in m/hPa) - just avg values, no need to be so accurate here
+            baro_alt_comp = 5.1f*(vel_right*vel_right*sin_roll-vel_fw*vel_fw*sin_pitch); //cm
+            // compensation required if baro_alt_comp > 8cm
+            // 3 solutions to test
+            // solution 1 : modulate TC_Z in inav. Higher TC decreases barometers impact on altitude estimate
+            // TC_Z = 3 when baro_alt_comp is minimal and quickly reaches high value (max 29) to limit baro error effect
+            // inertial_nav.set_time_constant_z(tuning_value);
+
+        }
+        
+        break;
 
     case ROLL_PITCH_SPORT:
         // apply SIMPLE mode transform
@@ -2441,7 +2460,7 @@ static void tuning(){
 
     case CH6_INAV_TC:
         // To-Do: allowing tuning TC for xy and z separately
-        inertial_nav.set_time_constant_xy(tuning_value);
+        //inertial_nav.set_time_constant_xy(tuning_value); //ST-JD baro fix test
         inertial_nav.set_time_constant_z(tuning_value);
         break;
 

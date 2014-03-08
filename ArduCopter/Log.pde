@@ -328,7 +328,7 @@ static void Log_Write_Control_Tuning()
         desired_sonar_alt   : (int16_t)target_sonar_alt,
         sonar_alt           : sonar_alt,
         desired_climb_rate  : desired_climb_rate,
-        climb_rate          : climb_rate
+        climb_rate          : climb_rate,
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 }
@@ -464,9 +464,10 @@ struct PACKED log_Attitude {
 	float wind_comp_y;
 	int16_t wind_offset_pitch;
 	int16_t wind_offset_roll;
-	int16_t timeout_pitch;
-	int16_t timeout_roll;
-	int16_t loiter_stab_timer;
+	//int16_t timeout_pitch;
+	//int16_t timeout_roll;
+	//int16_t loiter_stab_timer;
+    float    baro_alt_comp;  //ST-JD baro fix test
 };
 
 // Write an attitude packet
@@ -486,9 +487,10 @@ static void Log_Write_Attitude()
 		wind_comp_y		: (float)wind_comp_y,
 		wind_offset_pitch: (int16_t)wind_offset_pitch,
 		wind_offset_roll: (int16_t)wind_offset_roll,
-		timeout_pitch	: (int16_t)timeout_pitch,
-		timeout_roll	: (int16_t)timeout_roll,
-		loiter_stab_timer: (int16_t)loiter_stab_timer,
+        baro_alt_comp       : baro_alt_comp / 100.0f,  //ST-JD baro fix test
+		//timeout_pitch	: (int16_t)timeout_pitch,
+		//timeout_roll	: (int16_t)timeout_roll,
+		//loiter_stab_timer: (int16_t)loiter_stab_timer,
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 }
@@ -698,7 +700,7 @@ static const struct LogStructure log_structure[] PROGMEM = {
     { LOG_NAV_TUNING_MSG, sizeof(log_Nav_Tuning),       
       "NTUN", "Iffffffffff", "TimeMS,DPosX,DPosY,PosX,PosY,DVelX,DVelY,VelX,VelY,DAccX,DAccY" },
     { LOG_CONTROL_TUNING_MSG, sizeof(log_Control_Tuning),
-      "CTUN", "Ihhhffecchh", "TimeMS,ThrIn,AngBst,ThrOut,DAlt,Alt,BarAlt,DSAlt,SAlt,DCRt,CRt" },
+      "CTUN", "Ihhhffecchh", "TimeMS,ThrIn,AngBst,ThrOut,DAlt,Alt,BarAlt,DSAlt,SAlt,DCRt,CRt" },  //ST-JD baro fix test
     { LOG_COMPASS_MSG, sizeof(log_Compass),             
       "MAG", "Ihhhhhhhhh",    "TimeMS,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOfsX,MOfsY,MOfsZ" },
     { LOG_COMPASS2_MSG, sizeof(log_Compass),             
@@ -708,7 +710,7 @@ static const struct LogStructure log_structure[] PROGMEM = {
     { LOG_CMD_MSG, sizeof(log_Cmd),                 
       "CMD", "BBBBBeLL",     "CTot,CNum,CId,COpt,Prm1,Alt,Lat,Lng" },
     { LOG_ATTITUDE_MSG, sizeof(log_Attitude),       
-     "ATT", "IccccCCffccccc","TimeMS,DRoll,Roll,DPitch,Pitch,DYaw,Yaw,Cx,Cy,Op,Or,Tp,Tr,Tl" },  // ST-JD: log wind_comp and wind_offset     
+     "ATT", "IccccCCffccf","TimeMS,DRoll,Roll,DPitch,Pitch,DYaw,Yaw,Cx,Cy,Op,Or,BarC" },  // ST-JD: log wind_comp and wind_offset     
     { LOG_MODE_MSG, sizeof(log_Mode),
       "MODE", "Mh",          "Mode,ThrCrs" },
     { LOG_STARTUP_MSG, sizeof(log_Startup),         
