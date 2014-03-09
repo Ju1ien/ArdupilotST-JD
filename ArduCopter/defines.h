@@ -42,6 +42,8 @@
 #define THROTTLE_AUTO                       3   // auto pilot altitude controller with target altitude held in next_WP.alt
 #define THROTTLE_LAND                       4   // landing throttle controller
 #define THROTTLE_MANUAL_HELI                5   // pilot manually controlled throttle for traditional helicopters
+#define THROTTLE_HYBRID_MAN                 6   // ST-JD Hybrid manual throttle (on throttle stick input)
+#define THROTTLE_HYBRID_AH                  7   // ST-JD Hybrid Alt Hold throttle (when throttle stick at middle position)
 
 
 // sonar - for use with CONFIG_SONAR_SOURCE

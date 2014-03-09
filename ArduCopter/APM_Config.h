@@ -61,5 +61,5 @@
 #endif
 
 #ifndef HYBRID_THR
- # define HYBRID_THR           THROTTLE_HOLD
+ # define HYBRID_THR           THROTTLE_HYBRID_AH
 #endif
