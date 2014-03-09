@@ -632,7 +632,9 @@ static int16_t brake_max_roll, brake_max_pitch; 	         // used to detect half
 static int16_t loiter_stab_timer;		// loiter stabilization timer: we read pid's I terms in wind_comp only after this time from loiter start
 static float brake_loiter_mix;		    // varies from 0 to 1, allows a smooth loiter engage
 static int8_t  update_wind_offset_timer;	// update wind_offset decimator (10Hz)
-#define MIN_THROTTLE_FACTOR 0.8f // the minimal value manual throttle can reach from throttle_cruise
+#define HYBRID_THROTTLE_FACTOR 1.3f     // Need param? Used to define the min and max throttle from the throttle_cruise in hybrid mode. Should be between 1,1 (smooth) and 1,5 (strong)
+//#define MX1HYBRID  // Alt Hold when throttle in deadband, manual otherwise
+#define MX2HYBRID  // Alt Hold when throttle from 0 to deadband_high, manual otherwise (above deadband)
 
 ////////////////////////////////////////////////////////////////////////////////
 // CH7 and CH8 save waypoint control
@@ -2066,8 +2068,6 @@ bool set_throttle_mode( uint8_t new_throttle_mode )
 
 // update_throttle_mode - run high level throttle controllers
 // 50 hz update rate
-//#define MX1HYBRID  // Alt Hold when throttle in deadband, manual otherwise
-#define MX2HYBRID  // Alt Hold when throttle from 0 to deadband_high, manual otherwise (above deadband)
 void update_throttle_mode(void)
 {
     int16_t pilot_climb_rate;
@@ -2144,34 +2144,26 @@ void update_throttle_mode(void)
     case THROTTLE_HYBRID_MAN:  // ST-JD
         #ifdef MX1HYBRID
         // manual throttle but with angle boost
-        if (g.rc_3.control_in <= 0) {
+        if ((g.rc_3.control_in <= 0) && (climb_rate > -20)) { // Added climb_rate condition to avoid throttle off in flight.
             set_throttle_out(0, false); // no need for angle boost with zero throttle
         }else{
             //Check if we have to switch back to Hybrid_Alt_Hold
             pilot_climb_rate = get_pilot_desired_climb_rate(g.rc_3.control_in);
             if (pilot_climb_rate==0) { //If stick is in deadband, switch to Hybrid Alt Hold
-            set_throttle_mode(THROTTLE_HYBRID_AH);
-            break;
+                set_throttle_mode(THROTTLE_HYBRID_AH);
+                break;
             }
             // Manual throttle scaled from thottle_cruise
             // ensure a reasonable throttle value
             pilot_throttle = constrain_int16(g.rc_3.control_in,0,1000);
             if (pilot_climb_rate<0) { // stick throttle bellow mid
-                pilot_throttle_scaled = (int16_t)((float)g.throttle_cruise * (MIN_THROTTLE_FACTOR + (1.0f-MIN_THROTTLE_FACTOR)*(float)pilot_throttle/400.0f));
+                //change HYBRID_THROTTLE_FACTOR value from 1.1 (very smooth throttle) to 1.5 (strong trhottle) or maybe more/less to define
+                pilot_throttle_scaled = (int16_t)(g.throttle_cruise*(1.0f-(400.0f-(float)pilot_throttle)*(1.0f-1.0f/HYBRID_THROTTLE_FACTOR)/400.0f ));
             }else{ // stick throttle above mid
-                pilot_throttle_scaled = (int16_t)(g.throttle_cruise + (float)(g.throttle_max-g.throttle_cruise)*((float)pilot_throttle-600.0f)/400.0f);
+                //change HYBRID_THROTTLE_FACTOR value from 1.1 (very smooth throttle) to 1.5 (strong trhottle) or maybe more/less to define
+                pilot_throttle_scaled = (int16_t)(g.throttle_cruise*(1.0f+((float)pilot_throttle-600.0f)*(HYBRID_THROTTLE_FACTOR-1.0f)/400.0f ));
             }
-            set_throttle_out(pilot_throttle_scaled, true);
-
-            // we should not update throttle cruise here as the copter should not hover.            
-            // update estimate of throttle cruise
-            /**
-            #if FRAME_CONFIG == HELI_FRAME
-            update_throttle_cruise(motors.get_collective_out());
-			#else
-			update_throttle_cruise(pilot_throttle_scaled);
-            #endif  //HELI_FRAME
-            **/
+            set_throttle_out(constrain_int16(pilot_throttle_scaled,0,1000), true);
 
             if (!ap.takeoff_complete && motors.armed()) {
                 if (pilot_throttle_scaled > g.throttle_cruise) {
@@ -2185,24 +2177,19 @@ void update_throttle_mode(void)
             //Check if we have to switch back to Hybrid_Alt_Hold
             pilot_climb_rate = get_pilot_desired_climb_rate(g.rc_3.control_in);
             if (pilot_climb_rate<=0) { //If stick is in deadband or below, switch to Hybrid Alt Hold
-            set_throttle_mode(THROTTLE_HYBRID_AH);
-            break;
+                set_throttle_mode(THROTTLE_HYBRID_AH);
+                break;
             }
             // Manual throttle scaled from thottle_cruise
             // ensure a reasonable throttle value
             pilot_throttle = constrain_int16(g.rc_3.control_in,0,1000);
-            pilot_throttle_scaled = (int16_t)(g.throttle_cruise + (float)(g.throttle_max-g.throttle_cruise)*((float)pilot_throttle-600.0f)/400.0f);
-            set_throttle_out(pilot_throttle_scaled, true);
-        
-            // we should not update throttle cruise here as the copter should not hover.
-            // update estimate of throttle cruise
-            /**
-            #if FRAME_CONFIG == HELI_FRAME
-            update_throttle_cruise(motors.get_collective_out());
-			#else
-			update_throttle_cruise(pilot_throttle_scaled);
-            #endif  //HELI_FRAME
-            **/
+            //previous code - throttle too strong - throttle_max=1000
+            //pilot_throttle_scaled = (int16_t)(g.throttle_cruise + (float)(g.throttle_max-g.throttle_cruise)*((float)pilot_throttle-600.0f)/400.0f);
+            
+            //new code - throttle_max limited
+            //change HYBRID_THROTTLE_FACTOR value from 1.1 (very smooth throttle) to 1.5 (strong trhottle) or maybe more/less to define
+            pilot_throttle_scaled = (int16_t)(g.throttle_cruise*(1.0f+((float)pilot_throttle-600.0f)*(HYBRID_THROTTLE_FACTOR-1.0f)/400.0f ));
+            set_throttle_out(constrain_int16(pilot_throttle_scaled,0,1000), true);
 
             if (!ap.takeoff_complete && motors.armed()) {
                 if (pilot_throttle_scaled > g.throttle_cruise) {
