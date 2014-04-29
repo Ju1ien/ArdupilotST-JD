@@ -632,7 +632,7 @@ static int16_t brake_max_roll, brake_max_pitch; 	         // used to detect half
 static int16_t loiter_stab_timer;		// loiter stabilization timer: we read pid's I terms in wind_comp only after this time from loiter start
 static float brake_loiter_mix;		    // varies from 0 to 1, allows a smooth loiter engage
 static int8_t  update_wind_offset_timer;	// update wind_offset decimator (10Hz)
-#define HYBRID_THROTTLE_FACTOR 1.3f     // Need param? Used to define the min and max throttle from the throttle_cruise in hybrid mode. Should be between 1,1 (smooth) and 1,5 (strong)
+#define HYBRID_THROTTLE_FACTOR 1.5f     // Need param? Used to define the min and max throttle from the throttle_cruise in hybrid mode. Should be between 1,1 (smooth) and 1,5 (strong)
 //#define MX1HYBRID  // Alt Hold when throttle in deadband, manual otherwise
 #define MX2HYBRID  // Alt Hold when throttle from 0 to deadband_high, manual otherwise (above deadband)
 
