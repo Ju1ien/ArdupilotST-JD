@@ -50,3 +50,16 @@
 //#define USERHOOK_MEDIUMLOOP userhook_MediumLoop();        // for code to be run at 10hz
 //#define USERHOOK_SLOWLOOP userhook_SlowLoop();            // for code to be run at 3.3hz
 //#define USERHOOK_SUPERSLOWLOOP userhook_SuperSlowLoop();  // for code to be run at 1hz
+
+// ST-JD: HYBRID Mode
+#ifndef HYBRID_YAW
+ # define HYBRID_YAW           YAW_HOLD
+#endif
+
+#ifndef HYBRID_RP
+ # define HYBRID_RP            ROLL_PITCH_HYBRID
+#endif
+
+#ifndef HYBRID_THR
+ # define HYBRID_THR           THROTTLE_HOLD
+#endif
