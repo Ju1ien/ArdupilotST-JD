@@ -24,8 +24,7 @@ static void arm_motors_check()
     }
 
     // allow arming/disarming in Loiter and AltHold if landed
-    // JD-ST : added Hybrid mode
-    if (ap.land_complete && (control_mode == LOITER || control_mode == ALT_HOLD || control_mode == HYBRID)) {
+    if (ap.land_complete && (control_mode == LOITER || control_mode == ALT_HOLD)) {
         allow_arming = true;
     }
 
@@ -102,7 +101,7 @@ static void auto_disarm_check()
     }
 
     // allow auto disarm in manual flight modes or Loiter/AltHold if we're landed
-    if(manual_flight_mode(control_mode) || (ap.land_complete && (control_mode == LOITER || control_mode == ALT_HOLD || control_mode == HYBRID))) { //JD-ST : Added Hybrid mode
+    if(manual_flight_mode(control_mode) || (ap.land_complete && (control_mode == LOITER || control_mode == ALT_HOLD))) {
         auto_disarming_counter++;
 
         if(auto_disarming_counter >= AUTO_DISARMING_DELAY) {

@@ -98,7 +98,6 @@ static bool set_nav_mode(uint8_t new_nav_mode)
             break;
 
         case NAV_LOITER:
-            wp_nav.init_I=true;     // JD-ST : we reset the i_terms in reset_I()
             // set target to current position
             wp_nav.init_loiter_target(inertial_nav.get_position(), inertial_nav.get_velocity());
             nav_initialised = true;
@@ -107,12 +106,6 @@ static bool set_nav_mode(uint8_t new_nav_mode)
         case NAV_WP:
             nav_initialised = true;
             break;
-            
-        case NAV_HYBRID:	        // ST-JD: nav_hybrid initialisation of stopping point
-			wp_nav.init_I=false;    // restore previous i_terms in Reset_I() => to avoid the stop_and_go effect
-            wp_nav.init_loiter_target(inertial_nav.get_position(), Vector3f(0,0,0));
-            nav_initialised=true;
-			break;
     }
 
     // if initialisation has been successful update the yaw mode
@@ -147,8 +140,7 @@ static void update_nav_mode()
             break;
 
         case NAV_LOITER:
-		case NAV_HYBRID:	// ST-JD: navigation in hybrid do the same as loiter...
-        // reset target if we are still on the ground
+            // reset target if we are still on the ground
             if (ap.land_complete) {
                 wp_nav.init_loiter_target(inertial_nav.get_position(),inertial_nav.get_velocity());
             }else{
