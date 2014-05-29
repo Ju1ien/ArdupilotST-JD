@@ -1005,6 +1005,8 @@ static void throttle_loop()
 
     // check if we've landed
     update_land_detector();
+    // JD test
+    update_land_detector2();
 
     // check auto_armed status
     update_auto_armed();

@@ -3,6 +3,10 @@
 // counter to verify landings
 static uint16_t land_detector;
 static bool land_with_gps;
+static uint16_t acc_land_detector2=0;
+
+// JD test land detector 2
+static float accel_z_hover_max = 0.0f;
 
 // land_init - initialise land controller
 static bool land_init(bool ignore_checks)
@@ -156,6 +160,7 @@ static float get_throttle_land()
 static bool update_land_detector()
 {
     // detect whether we have landed by watching for low climb rate and minimum throttle
+    // JD we maybe have to revert back to abs() code because some pple reach very high vertical velocity (eg 20m/s)
     if (climb_rate > -20 && motors.limit.throttle_lower) {
         if (!ap.land_complete) {
             // run throttle controller if accel based throttle controller is enabled and active (active means it has been given a target)
@@ -176,6 +181,40 @@ static bool update_land_detector()
 
     // return current state of landing
     return ap.land_complete;
+}
+
+// JD testing another way to detect landing. Based on Accelerometer :
+// if we have high negative Acc_z peak with low throttle_in and low throttle_out
+static bool update_land_detector2()
+{
+    const Vector3f &accel = ins.get_accel();
+    float accel_z;
+    
+    // get accel extreme vibration values for nominal hover.
+    // These references are required to set a decent threshold related to the controller damping
+    if (abs(climb_rate) < 40){
+        accel_z = fabs(accel.z+GRAVITY_MSS);
+        // update accel_z_hover_max only when copter is hovering for 0,5s
+        if (acc_land_detector2 < 25){
+            acc_land_detector2++;
+        }else if(accel_z > accel_z_hover_max){
+            accel_z_hover_max = accel_z;
+        }
+    }else{
+        acc_land_detector2 = 0;
+    }
+
+  
+    
+    if (accel.z+GRAVITY_MSS < -1.2f*accel_z_hover_max)
+    // Continuer sur l'analyse de courbe, on détermine le choc par une acc très négative suivi d'un rebondissement positif.
+    // mais ce n'est pas la meilleure solution car le twitch de gaz avant le correctif d'initialisation z_controller aurait entrainé de faux positifs.
+
+
+    //g.rc_3.servo_out
+    //g.rc_3.control_in
+    //g.throttle_cruise  
+    
 }
 
 // land_do_not_use_GPS - forces land-mode to not use the GPS but instead rely on pilot input for roll and pitch
