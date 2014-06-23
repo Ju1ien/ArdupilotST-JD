@@ -86,7 +86,7 @@ const AP_Param::GroupInfo AC_WPNav::var_info[] PROGMEM = {
     // @Range: 0 30000
     // @Increment: 1
     // @User: Standard
-    AP_GROUPINFO("CR_POT_RNG",   6, AC_WPNav, cruise_pot_angle_range, CRUISE_POT_ANGLE_RANGE),
+    AP_GROUPINFO("CR_POT_RNG",   8, AC_WPNav, cruise_pot_angle_range, CRUISE_POT_ANGLE_RANGE),
 
     // @Param: CR_VEL_MAX
     // @DisplayName: Cruise maximum velocity
@@ -95,7 +95,7 @@ const AP_Param::GroupInfo AC_WPNav::var_info[] PROGMEM = {
     // @Range: 0 300
     // @Increment: 0,1
     // @User: Standard
-    AP_GROUPINFO("CR_VEL_MAX",   7, AC_WPNav, cruise_vel_max, CRUISE_VEL_MAX),
+    AP_GROUPINFO("CR_VEL_MAX",   9, AC_WPNav, cruise_vel_max, CRUISE_VEL_MAX),
 
     // @Param: CR_VEL_INC
     // @DisplayName: Cruise velocity increase rate
@@ -104,7 +104,7 @@ const AP_Param::GroupInfo AC_WPNav::var_info[] PROGMEM = {
     // @Range: 0 135
     // @Increment: 0,1
     // @User: Standard
-    AP_GROUPINFO("CR_VEL_INC",   8, AC_WPNav, cruise_vel_increase_rate_max, CRUISE_VEL_INCREASE_RATE_MAX),
+    AP_GROUPINFO("CR_VEL_INC",   10, AC_WPNav, cruise_vel_increase_rate_max, CRUISE_VEL_INCREASE_RATE_MAX),
  
     AP_GROUPEND
 };
