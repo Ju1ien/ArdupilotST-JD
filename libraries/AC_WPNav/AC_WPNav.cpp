@@ -88,15 +88,24 @@ const AP_Param::GroupInfo AC_WPNav::var_info[] PROGMEM = {
     // @User: Standard
     AP_GROUPINFO("CR_POT_RNG",   8, AC_WPNav, cruise_pot_angle_range, CRUISE_POT_ANGLE_RANGE),
 
-    // @Param: CR_VEL_MAX
-    // @DisplayName: Cruise maximum velocity
-    // @Description: Defines the maximum cruise velocity in cm/s  - 1km/h = 27.78cm/s
+    // @Param: CR_VEL_MAX_FW
+    // @DisplayName: Cruise maximum forward velocity
+    // @Description: Defines the maximum forward cruise velocity in cm/s  - 1km/h = 27.78cm/s
     // @Units: cm/s
     // @Range: 0 300
     // @Increment: 0,1
     // @User: Standard
-    AP_GROUPINFO("CR_VEL_MAX",   9, AC_WPNav, cruise_vel_max, CRUISE_VEL_MAX),
+    AP_GROUPINFO("CR_MAX_FW",   9, AC_WPNav, cruise_vel_max_fw, CRUISE_VEL_MAX_FW),
 
+    // @Param: CR_VEL_MAX_BW
+    // @DisplayName: Cruise maximum backward velocity
+    // @Description: Defines the maximum backward cruise velocity in cm/s  - 1km/h = 27.78cm/s
+    // @Units: cm/s
+    // @Range: 0 300
+    // @Increment: 0,1
+    // @User: Standard
+    AP_GROUPINFO("CR_MAX_BW",   10, AC_WPNav, cruise_vel_max_bw, CRUISE_VEL_MAX_BW),
+    
     // @Param: CR_VEL_INC
     // @DisplayName: Cruise velocity increase rate
     // @Description: Defines the number of cm/s the cruise velocity will be increased/decreased if the pitch_stick is maintained full range during 1s 
@@ -104,7 +113,7 @@ const AP_Param::GroupInfo AC_WPNav::var_info[] PROGMEM = {
     // @Range: 0 135
     // @Increment: 0,1
     // @User: Standard
-    AP_GROUPINFO("CR_VEL_INC",   10, AC_WPNav, cruise_vel_increase_rate_max, CRUISE_VEL_INCREASE_RATE_MAX),
+    AP_GROUPINFO("CR_VEL_INC",   11, AC_WPNav, cruise_vel_increase_rate_max, CRUISE_VEL_INCREASE_RATE_MAX),
  
     AP_GROUPEND
 };

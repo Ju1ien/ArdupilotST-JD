@@ -45,7 +45,8 @@
 // Cruise flight mode
 # define CRUISE_VEL_INCREASE_RATE_MAX   55.56f      // number of cm/s the cruise velocity will be increased/decreased if the pitch_stick is maintained full range during 1s 
 # define CRUISE_POT_ANGLE_RANGE         27000       // number of cdeg of the course_pot_offset range
-# define CRUISE_VEL_MAX                 166.7f      // maximum cruise velocity in cm/s  - 1km/h = 27.78cm/s
+# define CRUISE_VEL_MAX_FW              166.7f      // maximum forward cruise velocity in cm/s  - 1km/h = 27.78cm/s
+# define CRUISE_VEL_MAX_BW              55.56f       // maximum backward cruise velocity in cm/s  - 1km/h = 27.78cm/s
 
 class AC_WPNav
 {
@@ -219,7 +220,8 @@ public:
     // Cruise flight mode
     // Parameters
     AP_Int16 cruise_pot_angle_range;       // number of centidegrees of the whole cape potentiometer range
-    AP_Float cruise_vel_max;               // maximum cruise velocity in cm/s  - 1km/h = 27.78cm/s
+    AP_Float cruise_vel_max_fw;            // maximum forward cruise velocity in cm/s  - 1km/h = 27.78cm/s
+    AP_Float cruise_vel_max_bw;            // maximum backward cruise velocity in cm/s  - 1km/h = 27.78cm/s
     AP_Float cruise_vel_increase_rate_max; // number of cm/s the cruise velocity will be increased/decreased if the pitch_stick is maintained full range during 1s 
     // Functions
     // get_loiter_speed_cms - returns loiter speed in cm/s (used for control_cruise mode)

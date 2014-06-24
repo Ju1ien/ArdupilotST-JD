@@ -7,6 +7,7 @@
  */
 
 # define POT_ANGLE_RC_SCALE         900
+# define DECREASE_RATE_FACTOR       2.0f    // Multiplication factor applyed on the WPNAV cruise_vel_increase_rate_max param
  
  // declare some function to keep compiler happy
 static void cruise_init_course_target(); 
@@ -93,28 +94,31 @@ static void cruise_run()
             simple_sin_yaw = sinf(angle_rad);
         }
      
-        // Debug condition
-        if(ap.CH7_flag!=0) {
-            // get updated pilot pitch input
-            if(ap.new_radio_frame){
-                rc2_control_in = g.rc_2.control_in;
-            }
-            
-            // update @100 or 400Hz the desired cruise velocity
-            if(rc2_control_in != 0){
-                // increase/decrease desired cruise velocity if pilot is moving pitch stick
+		// get updated pilot pitch input
+		if(ap.new_radio_frame){
+			rc2_control_in = g.rc_2.control_in;
+		}
+		
+		// update @100 or 400Hz the desired cruise velocity
+		if(rc2_control_in != 0){
+            // negative pitch means go forward
+            // increase desired cruise velocity if pilot is moving pitch stick forward
+			if(rc2_control_in < 0){
                 des_vel_cms += (wp_nav.cruise_vel_increase_rate_max/(float)MAIN_LOOP_RATE)*(float)(rc2_control_in)/4500.0f;
-                // ensure we are in a correct range: v=[0;wp_nav.cruise_vel_max]
-                // negative pitch means go forward
-                des_vel_cms = constrain_float(des_vel_cms, -wp_nav.cruise_vel_max, 0.0f);
             }
-            
-            // convert des_vel to a "fake stick angle" that will give this velocity through loiter code
-            // g.rc_2.control_in has to be overwriten by simple mode before being used, so update it only when new radio frame arrived
-            if(ap.new_radio_frame){
-                g.rc_2.control_in = (int16_t)(des_vel_cms*vel_to_angle_factor);
+            // decrease desired cruise velocity if pilot is moving pitch stick backward
+			if(rc2_control_in > 0){
+                des_vel_cms += (wp_nav.cruise_vel_increase_rate_max*DECREASE_RATE_FACTOR/(float)MAIN_LOOP_RATE)*(float)(rc2_control_in)/4500.0f;
             }
-        }
+			// ensure we are in a correct range: v=[-wp_nav.cruise_vel_max_bw;wp_nav.cruise_vel_max_fw]
+			des_vel_cms = constrain_float(des_vel_cms, -wp_nav.cruise_vel_max_fw, wp_nav.cruise_vel_max_bw);
+		}
+		
+		// convert des_vel to a "fake stick angle" that will give this velocity through loiter code
+		// g.rc_2.control_in has to be overwriten by simple mode before being used, so update it only when new radio frame arrived
+		if(ap.new_radio_frame){
+			g.rc_2.control_in = (int16_t)(des_vel_cms*vel_to_angle_factor);
+		}
         
         // apply SIMPLE mode transform to pilot inputs
         update_simple_mode();
