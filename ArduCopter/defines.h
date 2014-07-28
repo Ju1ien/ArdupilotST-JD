@@ -87,7 +87,8 @@
 // Auto Pilot modes
 // ----------------
 #define STABILIZE 0                     // hold level position
-#define ACRO 1                          // rate control
+#define CRUISE 1                        // replaces acro in MP
+#define ACRO 17                         // N°1 replaced by cruise to acces it via MP rate control
 #define ALT_HOLD 2                      // AUTO control
 #define AUTO 3                          // AUTO control
 #define GUIDED 4                        // AUTO control
@@ -101,7 +102,7 @@
 #define FLIP        14                  // flip the vehicle on the roll axis
 #define AUTOTUNE    15                  // autotune the vehicle's roll and pitch gains
 #define POSHOLD     16                  // position hold with manual override
-#define NUM_MODES   17
+#define NUM_MODES   18
 
 
 // CH_6 Tuning

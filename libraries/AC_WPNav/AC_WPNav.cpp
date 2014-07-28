@@ -79,6 +79,42 @@ const AP_Param::GroupInfo AC_WPNav::var_info[] PROGMEM = {
     // @User: Advanced
     AP_GROUPINFO("LOIT_JERK",   7, AC_WPNav, _loiter_jerk_max_cmsss, WPNAV_LOITER_JERK_MAX_DEFAULT),
 
+    // @Param: CR_POT_RNG
+    // @DisplayName: Cruise potentiometer range
+    // @Description: Defines the number of centidegrees of the whole cape potentiometer range
+    // @Units: cdeg
+    // @Range: 0 30000
+    // @Increment: 1
+    // @User: Standard
+    AP_GROUPINFO("CR_POT_RNG", 8, AC_WPNav, cruise_pot_angle_range, CRUISE_POT_ANGLE_RANGE),
+
+    // @Param: CR_VEL_MAX_FW
+    // @DisplayName: Cruise maximum forward velocity
+    // @Description: Defines the maximum forward cruise velocity in cm/s - 1km/h = 27.78cm/s
+    // @Units: cm/s
+    // @Range: 0 300
+    // @Increment: 0,1
+    // @User: Standard
+    AP_GROUPINFO("CR_MAX_FW", 9, AC_WPNav, cruise_vel_max_fw, CRUISE_VEL_MAX_FW),
+    
+    // @Param: CR_VEL_MAX_BW
+    // @DisplayName: Cruise maximum backward velocity
+    // @Description: Defines the maximum backward cruise velocity in cm/s - 1km/h = 27.78cm/s
+    // @Units: cm/s
+    // @Range: 0 300
+    // @Increment: 0,1
+    // @User: Standard
+    AP_GROUPINFO("CR_MAX_BW", 10, AC_WPNav, cruise_vel_max_bw, CRUISE_VEL_MAX_BW),
+    
+    // @Param: CR_VEL_INC
+    // @DisplayName: Cruise velocity increase rate
+    // @Description: Defines the number of cm/s the cruise velocity will be increased/decreased if the pitch_stick is maintained full range during 1s
+    // @Units: cm/s/s
+    // @Range: 0 135
+    // @Increment: 0,1
+    // @User: Standard
+    AP_GROUPINFO("CR_VEL_INC", 11, AC_WPNav, cruise_vel_increase_rate_max, CRUISE_VEL_INCREASE_RATE_MAX),
+    
     AP_GROUPEND
 };
 
