@@ -48,7 +48,6 @@
 # define CRUISE_VEL_INCREASE_RATE_MAX   55.56f        // number of cm/s the cruise velocity will be increased/decreased if the pitch_stick is maintained full range during 1s
 # define CRUISE_POT_ANGLE_RANGE         27000         // number of cdeg of the course_pot_offset range
 # define CRUISE_VEL_MAX_FW              166.7f        // maximum forward cruise velocity in cm/s - 1km/h = 27.78cm/s
-# define CRUISE_VEL_MAX_BW              55.56f        // maximum backward cruise velocity in cm/s - 1km/h = 27.78cm/s
 
 class AC_WPNav
 {

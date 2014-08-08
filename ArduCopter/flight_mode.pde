@@ -104,6 +104,13 @@ static bool set_mode(uint8_t mode)
 
     // update flight mode
     if (success) {
+        // special cruise mode throttle deadband
+        if (mode == CRUISE){
+            g.rc_3.set_dead_zone(100);
+        }else{
+            g.rc_3.set_dead_zone(30);
+        }
+        
         // perform any cleanup required by previous flight mode
         exit_mode(control_mode, mode);
         control_mode = mode;

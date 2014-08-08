@@ -57,6 +57,8 @@ public:
     void        set_reverse(bool reverse);
     bool        get_reverse(void) const;
     void        set_default_dead_zone(int16_t dzone);
+    // special use for cruise mode
+    void        set_dead_zone(int16_t dzone);    
     
     // get the channel number
     uint8_t     get_ch_out(void) const { return _ch_out; };

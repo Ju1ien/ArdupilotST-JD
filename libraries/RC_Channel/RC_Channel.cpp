@@ -119,6 +119,13 @@ RC_Channel::set_default_dead_zone(int16_t dzone)
     }
 }
 
+// special for cruise mode
+void
+RC_Channel::set_dead_zone(int16_t dzone)
+{
+    _dead_zone.set(abs(dzone));
+}
+
 void
 RC_Channel::set_reverse(bool reverse)
 {

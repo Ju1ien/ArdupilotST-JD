@@ -7,7 +7,6 @@
  */
 
 # define POT_ANGLE_RC_SCALE         900
-# define DECREASE_RATE_FACTOR       2.0f    // Multiplication factor applyed on the WPNAV cruise_vel_increase_rate_max param
  
  // declare some function to keep compiler happy
 static void cruise_init_course_target(); 
@@ -100,26 +99,22 @@ static void cruise_run()
 		}
 		
 		// update @100 or 400Hz the desired cruise velocity
-		if(rc2_control_in != 0){
+		if(rc2_control_in == 0){
+            // no pitch stick input, use CH8 potar
             // negative pitch means go forward
-            // increase desired cruise velocity if pilot is moving pitch stick forward
-			if(rc2_control_in < 0){
-                des_vel_cms += (wp_nav.cruise_vel_increase_rate_max/(float)MAIN_LOOP_RATE)*(float)(rc2_control_in)/4500.0f;
-            }
-            // decrease desired cruise velocity if pilot is moving pitch stick backward
-			if(rc2_control_in > 0){
-                des_vel_cms += (wp_nav.cruise_vel_increase_rate_max*DECREASE_RATE_FACTOR/(float)MAIN_LOOP_RATE)*(float)(rc2_control_in)/4500.0f;
-            }
-			// ensure we are in a correct range: v=[-wp_nav.cruise_vel_max_bw;wp_nav.cruise_vel_max_fw]
-			des_vel_cms = constrain_float(des_vel_cms, -wp_nav.cruise_vel_max_fw, wp_nav.cruise_vel_max_bw);
-		}
+            //des_vel_cms = (wp_nav.cruise_vel_increase_rate_max/(float)MAIN_LOOP_RATE)*(float)(rc2_control_in)/4500.0f;
+			des_vel_cms = -wp_nav.cruise_vel_max_fw*(float)(g.rc_8.control_in)/1000.0f;
+			// ensure we are in a correct range: v=[0;wp_nav.cruise_vel_max_fw]
+			des_vel_cms = constrain_float(des_vel_cms, -wp_nav.cruise_vel_max_fw, 0.0f);
 		
-		// convert des_vel to a "fake stick angle" that will give this velocity through loiter code
-		// g.rc_2.control_in has to be overwriten by simple mode before being used, so update it only when new radio frame arrived
-		if(ap.new_radio_frame){
+        	// convert des_vel to a "fake stick angle" that will give this velocity through loiter code
+            // g.rc_2.control_in has to be overwriten by simple mode before being used, so update it only when new radio frame arrived
+            if(ap.new_radio_frame){
 			g.rc_2.control_in = (int16_t)(des_vel_cms*vel_to_angle_factor);
-		}
+            }
         
+        }
+		      
         // apply SIMPLE mode transform to pilot inputs
         update_simple_mode();
 
