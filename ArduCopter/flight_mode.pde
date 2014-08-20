@@ -262,6 +262,21 @@ static bool manual_flight_mode(uint8_t mode) {
     return false;
 }
 
+// auto_flight_mode - returns true if flight mode is completely autonomous (i.e. roll, pitch, yaw and throttle are controlled by autopilot without using pilot inputs)
+static bool auto_flight_mode(uint8_t mode) {
+    switch(mode) {
+        case AUTO:
+        case GUIDED:
+        case LAND:
+        case RTL:
+            return true;
+        default:
+            return false;
+    }
+
+    return false;
+}
+
 //
 // print_flight_mode - prints flight mode to serial port.
 //

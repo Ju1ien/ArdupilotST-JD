@@ -2,6 +2,7 @@
 
 // counter to verify landings
 static uint16_t land_detector;
+static uint16_t fake_detection_check = 0;
 static bool land_with_gps;
 
 static uint32_t land_start_time;
@@ -200,15 +201,23 @@ static bool update_land_detector()
             }else{
                 set_land_complete(true);
                 land_detector = 0;
+                fake_detection_check = LAND_DETECTOR_TRIGGER;
             }
         }
-    } else if ((motors.get_throttle_out() > get_non_takeoff_throttle()) || failsafe.radio) {
-        // we've sensed movement up or down so reset land_detector
+    } else {
+        // reset land_detector as we need 50 successive iterations and not 50 cumulated ones to trigger the detection
         land_detector = 0;
-        if(ap.land_complete) {
-            set_land_complete(false);
+        // we've sensed movement up or down during (1s = land_detector_trigger_timer) following land_detection, so reset land_detector conditionnally as it may be a fake detection
+        if (fake_detection_check > 0){
+            // Reset land_detection if throttle stick is <> 0 for non_auto_modes. Auto_modes would land in RTL or LAND mode and both will
+            // auto_disarm once landed so the baro disturbance will have no time to fake climb_rate and reset land_detector.
+            if (ap.land_complete && ((g.rc_3.control_in != 0 && !failsafe.radio && !auto_flight_mode(control_mode)) || auto_flight_mode(control_mode))){
+                set_land_complete(false);
+            }
         }
     }
+    
+    if (fake_detection_check > 0) fake_detection_check--; 
 
     // return current state of landing
     return ap.land_complete;
