@@ -838,6 +838,9 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
 #ifdef USERHOOK_SUPERSLOWLOOP
     { userhook_SuperSlowLoop,400,   10 },
 #endif
+#if OA_ENABLED == ENABLED       //OA code
+    { oa_run,                133, 1000 },
+#endif
 };
 #else
 /*
@@ -1065,7 +1068,7 @@ static void update_mount()
 {
 #if MOUNT == ENABLED
     // update camera mount's position
-    camera_mount.update_mount_position();
+    //camera_mount.update_mount_position();   //called by OA
 #endif
 
 #if MOUNT2 == ENABLED
@@ -1139,7 +1142,7 @@ static void fifty_hz_logging_loop()
 
 // three_hz_loop - 3.3hz loop
 static void three_hz_loop()
-{
+{   
     // check if we've lost contact with the ground station
     failsafe_gcs_check();
 
@@ -1160,7 +1163,7 @@ static void three_hz_loop()
 
 // one_hz_loop - runs at 1Hz
 static void one_hz_loop()
-{
+{    
     if (g.log_bitmask != 0) {
         Log_Write_Data(DATA_AP_STATE, ap.value);
     }
@@ -1403,7 +1406,7 @@ static void update_altitude()
     baro_alt            = read_barometer();
 
     // read in sonar altitude
-    sonar_alt           = read_sonar();
+    //sonar_alt           = read_sonar();  // commented here, called by OA
 
     // write altitude info to dataflash logs
     if (g.log_bitmask & MASK_LOG_CTUN) {

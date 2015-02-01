@@ -40,6 +40,9 @@
 
 #define POSCONTROL_VEL_UPDATE_TIME              0.020f  // 50hz update rate on high speed CPUs (Pixhawk, Flymaple)
 
+// OA specific 
+#define OA_ACCEL_XY_BRAKE_RATIO                 0.8f    // [0;1] the nominal accel value OA will brake in case of object detection = OA_ACCEL_XY_BRAKE_RATIO * _accel_cms. higher value will brake harder, 0 means no braking
+
 class AC_PosControl
 {
 public:
@@ -247,7 +250,12 @@ public:
 
     // lean_angles_to_accel - convert roll, pitch lean angles to lat/lon frame accelerations in cm/s/s
     void lean_angles_to_accel(float& accel_x_cmss, float& accel_y_cmss) const;
-
+    
+    /// OA specific functions
+    // oa_check_and_correct_desired_xy_vel - apply OA limits & commands to desired_vel - called by the calc_loiter_desired_velocity() function
+    void oa_check_and_correct_desired_xy_vel(float dt);
+    void oa_set_obj_detect_results(bool is_object_detected, int16_t max_braking_dist){_oa_is_object_detected = is_object_detected; _oa_max_braking_dist = max_braking_dist;}
+    
     static const struct AP_Param::GroupInfo var_info[];
 
 private:
@@ -370,5 +378,14 @@ private:
 
     // velocity controller internal variables
     uint8_t     _vel_xyz_step;          // used to decide which portion of velocity controller to run during this iteration
+    
+    // oa static variables
+    float       _oa_brake_xy_acc;          // to-do- no need a static variable for it, could be moved to the function. the default or current oa brake xy acceleration
+    float       _oa_control_des_vel_total; // will be used to make low-pass filter on velocity transitions, for braking (case 2) or even reducing the velocity (limitation only case 1)
+    bool        _flag_init_oa_control_des_vel_total = true;
+    float       _oa_brake_vel_total;       // used for the braking velocity curve, will get better shape than if using current_velocity or desired_velocity
+    bool        _flag_init_oa_brake_vel_total = true;
+    bool        _oa_is_object_detected;
+    int16_t     _oa_max_braking_dist;
 };
 #endif	// AC_POSCONTROL_H

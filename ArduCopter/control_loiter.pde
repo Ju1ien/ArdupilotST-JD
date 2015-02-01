@@ -46,15 +46,15 @@ static void loiter_run()
     if (!failsafe.radio) {
         // apply SIMPLE mode transform to pilot inputs
         update_simple_mode();
+        
+        // get pilot desired climb rate
+        target_climb_rate = get_pilot_desired_climb_rate(g.rc_3.control_in);
 
         // process pilot's roll and pitch input
         wp_nav.set_pilot_desired_acceleration(g.rc_1.control_in, g.rc_2.control_in);
 
         // get pilot's desired yaw rate
         target_yaw_rate = get_pilot_desired_yaw_rate(g.rc_4.control_in);
-
-        // get pilot desired climb rate
-        target_climb_rate = get_pilot_desired_climb_rate(g.rc_3.control_in);
 
         // check for pilot requested take-off
         if (ap.land_complete && target_climb_rate > 0) {
@@ -77,6 +77,18 @@ static void loiter_run()
         attitude_control.set_throttle_out(get_throttle_pre_takeoff(g.rc_3.control_in), false);
         pos_control.set_alt_target_to_current_alt();
     }else{
+        // IF OA enabled, compute the anticipated desired velocities, check safe distance from OA, override/limit the pilot inputs
+        if(oa_enabled()){
+            // 1- wp_nav estimates des_acc.x/y and approiximativelly evaluates the anticipated_des_vel.x/y from the anticipation time
+            // 2- anticipated_des_vel.x/y and target_climb_rate are sent to OA to be used as vel vector (scan and check from it). Surface tracking Climb Rate will be a bit delayed - next loop - nvm
+            oa_set_vel_xyz(wp_nav.oa_anticipate_pilot_desired_vel_xy(g.rc_1.control_in, g.rc_2.control_in),target_climb_rate);
+            // 3- set obj detect results to poscontrol (will be used to limit/override pilot controls)
+            // obviously, the answer from oa won't be immediate as it requires several loops to scan and check in mapping.
+            pos_control.oa_set_obj_detect_results(oa_is_object_detected(), oa_get_max_braking_dist());
+            // 4- Apply OA limits & commands to desired_xy_vel
+            pos_control.oa_check_and_correct_desired_xy_vel(G_Dt);
+        }
+    
         // run loiter controller
         wp_nav.update_loiter();
 

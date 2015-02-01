@@ -232,7 +232,8 @@ AP_Mount::AP_Mount(const struct Location *current_loc, const AP_AHRS &ahrs, uint
     _retract_angles = Vector3f(0,0,0);
     _neutral_angles = Vector3f(0,0,0);
     _control_angles = Vector3f(0,0,0);
-
+    _oa_control_angles = Vector3f(0,0,0);
+    
     // default unknown mount type
     _mount_type = k_unknown;
 
@@ -291,6 +292,12 @@ void AP_Mount::set_neutral_angles(float roll, float tilt, float pan)
 void AP_Mount::set_control_angles(float roll, float tilt, float pan)
 {
     _control_angles = Vector3f(roll, tilt, pan);
+}
+
+/// sets the servo angles for OA code, note angles are in degrees
+void AP_Mount::set_oa_control_angles(float roll, float tilt, float pan)
+{
+    _oa_control_angles = Vector3f(roll, tilt, pan);
 }
 
 /// used to tell the mount to track GPS location
@@ -393,6 +400,27 @@ void AP_Mount::update_mount_position()
         break;
     }
 #endif
+
+//#if OA_ENABLED == ENABLED  // If this condition is enabled, the code is not executed, check why, define?
+    // point mount to a point given by OA code, no stabilization required here
+    case MAV_MOUNT_MODE_OA_BYPASS:
+    {
+        _roll_angle  = constrain_float(_oa_control_angles.x, _roll_angle_min*0.01f, _roll_angle_max*0.01f);
+        _tilt_angle  = constrain_float(_oa_control_angles.y, _tilt_angle_min*0.01f, _tilt_angle_max*0.01f);
+        _pan_angle   = constrain_float(_oa_control_angles.z, _pan_angle_min*0.01f, _pan_angle_max*0.01f);
+        /*
+        //debug
+        hal.console->printf_P(PSTR("raw_roll_angle = %f, raw_tilt_angle = %f, raw_pan_angle = %f\n roll_angle = %f, tilt_angle = %f, pan_angle = %f\n"),
+                _oa_control_angles.x,
+                _oa_control_angles.y,
+                _oa_control_angles.z,
+                _roll_angle,
+                _tilt_angle,
+                _pan_angle); //debug
+                */
+        break;
+    }
+//#endif  // OA_ENABLED == ENABLED
 
     default:
         //do nothing
@@ -515,6 +543,7 @@ void AP_Mount::status_msg(mavlink_message_t *msg, mavlink_channel_t chan)
     case MAV_MOUNT_MODE_NEUTRAL:                        // neutral position (Roll,Pitch,Yaw) from EEPROM
     case MAV_MOUNT_MODE_MAVLINK_TARGETING:      // neutral position and start MAVLink Roll,Pitch,Yaw control with stabilization
     case MAV_MOUNT_MODE_RC_TARGETING:                   // neutral position and start RC Roll,Pitch,Yaw control with stabilization
+    case MAV_MOUNT_MODE_OA_BYPASS:
         packet.pointing_b = _roll_angle*100;            // degrees*100
         packet.pointing_a = _tilt_angle*100;            // degrees*100
         packet.pointing_c = _pan_angle*100;             // degrees*100

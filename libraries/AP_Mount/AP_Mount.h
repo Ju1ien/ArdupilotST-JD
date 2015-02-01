@@ -28,6 +28,23 @@
 #include <GCS_MAVLink.h>
 #include <RC_Channel.h>
 
+// included HAL for oa debug only
+// AP_HAL
+#include <AP_HAL.h>
+#include <AP_HAL_AVR.h>
+#include <AP_HAL_AVR_SITL.h>
+#include <AP_HAL_PX4.h>
+#include <AP_HAL_VRBRAIN.h>
+#include <AP_HAL_FLYMAPLE.h>
+#include <AP_HAL_Linux.h>
+#include <AP_HAL_Empty.h> 
+
+////////////////////////////////////////////////////////////////////////////////
+// AP_HAL instance
+////////////////////////////////////////////////////////////////////////////////
+//debug
+extern const AP_HAL::HAL& hal; //end debug
+
 class AP_Mount
 {
 public:
@@ -56,6 +73,9 @@ public:
     void                    set_roi_cmd(const struct Location *target_loc);
     void                    configure_cmd();
     void                    control_cmd();
+    
+    // OA used
+    void                    set_oa_control_angles(float roll, float tilt, float pan);
 
     // should be called periodically
     void                    update_mount_position();
@@ -105,6 +125,8 @@ private:
     float                           _roll_angle; ///< degrees
     float                           _tilt_angle; ///< degrees
     float                           _pan_angle;  ///< degrees
+    
+    Vector3f                        _oa_control_angles; ///< OA controlled position for mount, vector.x = roll vector.y = tilt, vector.z=pan  
 
     // EEPROM parameters
     AP_Int8                         _stab_roll; ///< (1 = yes, 0 = no)
@@ -128,7 +150,7 @@ private:
 
     AP_Vector3f                     _retract_angles; ///< retracted position for mount, vector.x = roll vector.y = tilt, vector.z=pan
     AP_Vector3f                     _neutral_angles; ///< neutral position for mount, vector.x = roll vector.y = tilt, vector.z=pan
-    AP_Vector3f                     _control_angles; ///< GCS controlled position for mount, vector.x = roll vector.y = tilt, vector.z=pan
+    AP_Vector3f                     _control_angles; ///< GCS controlled position for mount, vector.x = roll vector.y = tilt, vector.z=pan 
 };
 
 #endif // __AP_MOUNT_H__

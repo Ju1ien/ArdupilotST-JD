@@ -44,6 +44,9 @@
 
 #define WPNAV_YAW_DIST_MIN                 200      // minimum track length which will lead to target yaw being updated to point at next waypoint.  Under this distance the yaw target will be frozen at the current heading
 
+#define OA_ANTICIPATION_LEASH_CM        100.0f      // the anticipated desired_vel will be limited by the leash to avoid too large errors between current des_vel and next integrated des_vel. Will be used to define the integration time.
+#define OA_MAX_ANTICIPATION_TIME        0.5f        // second. computed from the anticipation leash and the current desired velocity.
+
 class AC_WPNav
 {
 public:
@@ -157,7 +160,10 @@ public:
 
     /// calculate_wp_leash_length - calculates track speed, acceleration and leash lengths for waypoint controller
     void calculate_wp_leash_length();
-
+    
+    // oa_anticipate_pilot_desired_vel_xy - calculates the integrated pilot roll/pitch rc inputs to anticipate the copter velocity vector and check the future copter path for objects
+    Vector2f oa_anticipate_pilot_desired_vel_xy(float control_roll, float control_pitch);
+    
     ///
     /// spline methods
     ///
@@ -243,7 +249,7 @@ protected:
 
     /// get_slow_down_speed - returns target speed of target point based on distance from the destination (in cm)
     float get_slow_down_speed(float dist_from_dest_cm, float accel_cmss);
-
+    
     /// spline protected functions
 
     /// update_spline_solution - recalculates hermite_spline_solution grid

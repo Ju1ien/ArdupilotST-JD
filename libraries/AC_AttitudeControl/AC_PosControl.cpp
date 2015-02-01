@@ -404,6 +404,7 @@ void AC_PosControl::set_accel_xy(float accel_cmss)
 {
     if ((float)fabs(_accel_cms-accel_cmss) > 1.0f) {
         _accel_cms = accel_cmss;
+        _oa_brake_xy_acc = _accel_cms*OA_ACCEL_XY_BRAKE_RATIO;
         _flags.recalc_leash_xy = true;
     }
 }
@@ -883,4 +884,111 @@ float AC_PosControl::calc_leash_length(float speed_cms, float accel_cms, float k
     }
 
     return leash_length;
+}
+
+// oa_check_and_correct_desired_vel - apply OA limits & commands to desired_vel - called by the calc_loiter_desired_velocity() function
+void AC_PosControl::oa_check_and_correct_desired_xy_vel(float dt)
+{
+    float kP = _p_pos_xy.kP();
+    float des_vel_total = pythagorous2(_vel_desired.x, _vel_desired.y);     // based on user inputs and/or oa_vel limitations to pilot inputs (desired velocity)
+    float des_acc_cmss;                                                     // used to limit pilot inputs (des_vel)    
+    float stopping_dist;                                                    // based on user inputs and/or oa_vel limitations to pilot inputs (desired velocity)
+    float max_stopping_dist = (float)_oa_max_braking_dist;                  // based on obj_detect measurement. max_stopping_dist = object_dist - safety_dist
+    float max_safe_vel;                                                     // based on obj_detect measurement
+    float linear_distance;                                                  // based on _oa_brake_xy_acc
+    float linear_velocity;                                                  // based on _oa_brake_xy_acc      
+    const Vector3f& curr_vel = _inav.get_velocity();                        // based on true (current) velocity
+    float curr_vel_total = pythagorous2(curr_vel.x, curr_vel.y);            // based on true (current) velocity
+    
+    // avoid divide by zero if kP is very low or acceleration is zero
+    if (kP <= 0.0f || _accel_cms <= 0.0f) {
+        //stopping_dist = 0.0f;
+        return;
+    }
+    
+    _oa_brake_xy_acc = _accel_cms*OA_ACCEL_XY_BRAKE_RATIO;    
+    // calculate point at which velocity switches from linear to sqrt
+    linear_velocity = _oa_brake_xy_acc/kP;    
+    // compute max safe velocity
+    max_safe_vel = max_stopping_dist * kP;
+    if (max_safe_vel > linear_velocity) {
+        max_safe_vel = safe_sqrt(_oa_brake_xy_acc*(2*kP*kP*max_stopping_dist-_oa_brake_xy_acc))/kP;
+    }
+    
+    // Here the different cases
+    // case 1 : no object but limited safe distance (current cleared range), so limit max desired velocity
+    // case 2 : object detected in the current path, check velocity and, when needed, engage a braking procedure to stop in time
+    // case 3 : copter in the red zone (within the safety margin), has to engage a bounce or avoidance procedure (side or back step)
+    
+    // case 1: no object but limited range + pilot stick input not null => limit max desired velocity - human pilot mode only
+    if((!_oa_is_object_detected)&&(des_vel_total>5.0f)){    //5 = no_vel but avoids /0
+        // Pilot is trying to go too fast, limit the desired_velocity 
+        if (des_vel_total > max_safe_vel) {
+            // limit desired velocity
+            if(curr_vel_total<max_safe_vel){    // if current velocity is still under the max_safe_vel, just limit the des_vel to max_safe_vel
+                // do nothing, max_safe_vel value unchanged
+                _flag_init_oa_control_des_vel_total = true;
+            }else{  // current vel is too high, apply a speed reduction starting from curr_vel and compute an intermediary max_safe_vel (temporarly too high but we need smooth vel transitions (low pass filter)
+                // we don't use the limited _oa_brake_xy_acc but the whole _accel_cms here as it is the speed limitation, we don't evaluate a threshold with headroom but do use the whole acc if needed
+                if(_flag_init_oa_control_des_vel_total){
+                    _oa_control_des_vel_total = curr_vel_total; // set initial velocity of the oa speed reduction curve
+                    _flag_init_oa_control_des_vel_total = false;
+                }
+                des_acc_cmss = _accel_cms*(max_safe_vel-_oa_control_des_vel_total)/400.0f; // 400cms is set arbitrary. that means we will accelerate at the max _accel_cms when the difference between max_safe_vel and des_vel_total is >= 400cms
+                _oa_control_des_vel_total += constrain_float(des_acc_cmss,-_accel_cms,_accel_cms)*dt;
+                max_safe_vel = _oa_control_des_vel_total;
+            }
+        }else{  // des_vel acceptable, do not limit pilot inputs
+            _flag_init_oa_control_des_vel_total = true;
+        }
+    }else{
+        _flag_init_oa_control_des_vel_total = true;
+    }
+    
+    // case 2 : object detected in the moving direction + copter moving, engage a braking procedure to stop in time - could be used for every pos_controlled flight modes
+    if((_oa_is_object_detected)&&(curr_vel_total>5.0f)){    //the "5 cms" value represents the OA_VEL_0 of OA code.
+        if(max_stopping_dist<=0.0f){           // max_stopping_dist could be negative if the copter is already inside the safety margin
+            max_stopping_dist = 1.0f;          // so, set it to a minimal and not null value (avoid /0) to try and brake anyways (even if too late, do our best)
+        }
+        // if current velocity is over max safe velocity, engage braking. otherwise, do nothing
+        if (curr_vel_total > max_safe_vel) {
+            //_oa_brake_xy_acc est utilisé pour calculer stopping_dist, laissant ainsi un peu de marge pour le freinage. Ici on va donc calculer et appliquer la bonne accélération pour s'arrêter exactement à la limite
+            // si la valeur d'accélération est au-delà de _accel_cms, alors on est cuit, envisager éventuellement une manoeuvre d'éviction, idem si max-stopping_dist est déjà négatif. cela revient au cas 3
+            // compute the right acceleration to get vel = 0 at the safety margin limit position.
+            if(max_stopping_dist<des_vel_total){ //linear
+                _oa_brake_xy_acc = des_vel_total*des_vel_total/max_stopping_dist;
+            }else{  //sqrt
+                _oa_brake_xy_acc = kP*kP*max_stopping_dist - kP*safe_sqrt((kP*max_stopping_dist-des_vel_total)*(kP*max_stopping_dist+des_vel_total));
+            }
+            if(_flag_init_oa_brake_vel_total){
+                _oa_brake_vel_total = curr_vel_total; // set initial velocity of the oa brake curve
+                _flag_init_oa_brake_vel_total = false;
+            }
+            // limit _oa_brake_xy_acc to a decent value
+            _oa_brake_vel_total -= constrain_float(_oa_brake_xy_acc,-_accel_cms,_accel_cms)*dt;
+            max_safe_vel = _oa_brake_vel_total;
+        }else{
+            _flag_init_oa_brake_vel_total = true;
+        }
+    }else{
+        _flag_init_oa_brake_vel_total = true;
+    }
+    
+    // Apply _vel_desired.x/y corrections for both cases 1 or 2
+    max_safe_vel = max(max_safe_vel, 0.0f);
+    _vel_desired.x = max_safe_vel*_vel_desired.x/des_vel_total;
+    _vel_desired.y = max_safe_vel*_vel_desired.y/des_vel_total;
+    // to-do: compute the reduction factor = max_safe_vel/des_vel_total to apply that same ratio for z controller (if possible). and maybe also in the other way (from z to xy)?
+    
+    // case 3 : copter in the red zone (within the safety margin), has to engage an avoidance procedure (side or back step)
+    //if(oa_object_in_safety_zone()?), limited to cases where pilot gives no input, or only with limited vel, ... that case is the most variable
+    // TBD
+    /*
+    Créer fonction permettant de vérifier ds le mapping les cases environnantes et en déduire le target point
+    Voir pour procédure d'éviction avancée en carré style toreador au lieu d'une marche arrière basique et potentiellement sans fin.
+    */
+    // use set_xy_target() ?    
+    // no velocity, set des_vel to 0 ?
+    //_vel_desired.x = 0.0f; ?
+    //_vel_desired.y = 0.0f; ?
 }

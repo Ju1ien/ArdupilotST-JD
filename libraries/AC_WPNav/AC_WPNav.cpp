@@ -264,7 +264,7 @@ void AC_WPNav::calc_loiter_desired_velocity(float nav_dt)
             desired_vel.y = min(desired_vel.y + WPNAV_LOITER_ACCEL_MIN*nav_dt, 0);
         }
     }
-
+    
     // send adjusted feed forward velocity back to position controller
     _pos_control.set_desired_velocity_xy(desired_vel.x,desired_vel.y);
 }
@@ -921,4 +921,37 @@ float AC_WPNav::get_slow_down_speed(float dist_from_dest_cm, float accel_cmss)
     } else {
         return target_speed;
     }
+}
+
+// oa_anticipate_pilot_desired_vel_xy - calculates the integrated pilot roll/pitch rc inputs to anticipate the copter velocity vector and check the future copter path for objects
+Vector2f AC_WPNav::oa_anticipate_pilot_desired_vel_xy(float control_roll, float control_pitch)
+{
+    Vector2f anticipated_pilot_xy_des_vel;
+    //const Vector3f& curr_vel = _inav.get_velocity();
+    const Vector3f& curr_des_vel = _pos_control.get_desired_velocity();
+    float curr_des_vel_total = curr_des_vel.length();
+    float anticipation_time;
+    
+    // anticipation time
+    if(curr_des_vel_total > 5.0f){ //avoids dision by 0. the "5" value represents the OA_VEL_0 of OA code.
+        anticipation_time = constrain_float(OA_ANTICIPATION_LEASH_CM/curr_des_vel_total, 0.0f, OA_MAX_ANTICIPATION_TIME);
+    }else{
+        anticipation_time = OA_MAX_ANTICIPATION_TIME;
+    }
+    
+    //compute desired bf acc from pilot input
+    float pilot_acc_fwd = -control_pitch * _loiter_accel_cms / 4500.0f;
+    float pilot_acc_rgt = control_roll * _loiter_accel_cms / 4500.0f;
+    
+    // rotate pilot input to lat/lon frame
+    Vector2f pilot_des_acc;
+    pilot_des_acc.x = (pilot_acc_fwd*_ahrs.cos_yaw() - pilot_acc_rgt*_ahrs.sin_yaw());
+    pilot_des_acc.y = (pilot_acc_fwd*_ahrs.sin_yaw() + pilot_acc_rgt*_ahrs.cos_yaw());
+    
+    // very basic estimate (no jerk, constant fake drag...), but errors should remain low as it is a relatively short term anticipation
+    anticipated_pilot_xy_des_vel.x = curr_des_vel.x + (pilot_des_acc.x - _loiter_accel_cms*curr_des_vel.x/_loiter_speed_cms)*anticipation_time;
+    anticipated_pilot_xy_des_vel.y = curr_des_vel.y + (pilot_des_acc.y - _loiter_accel_cms*curr_des_vel.y/_loiter_speed_cms)*anticipation_time;
+    
+    return anticipated_pilot_xy_des_vel;    
+    //to-do: for bouncing, pilot des_acc will probably be wrong so return the curr_vel instead... find out the best way to identify this case
 }

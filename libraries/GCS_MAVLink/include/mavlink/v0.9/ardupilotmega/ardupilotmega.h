@@ -40,7 +40,8 @@ enum MAV_MOUNT_MODE
 	MAV_MOUNT_MODE_MAVLINK_TARGETING=2, /* Load neutral position and start MAVLink Roll,Pitch,Yaw control with stabilization | */
 	MAV_MOUNT_MODE_RC_TARGETING=3, /* Load neutral position and start RC Roll,Pitch,Yaw control with stabilization | */
 	MAV_MOUNT_MODE_GPS_POINT=4, /* Load neutral position and start to point to Lat,Lon,Alt | */
-	MAV_MOUNT_MODE_ENUM_END=5, /*  | */
+	MAV_MOUNT_MODE_OA_BYPASS=5, /* Point to the angles given by OA, no stabilization required | */
+	MAV_MOUNT_MODE_ENUM_END=6, /*  | */
 };
 #endif
 
