@@ -45,8 +45,8 @@ static void oa_update_map_from_lrf_read();
 static void oa_update_map_from_copter_pos_and_vel();
 //static int oa_select_scan_algo(float &Angle_y, const Vector3f& velocity);
 static int16_t oa_select_scan_algo(float &Angle_y); // got compîlation errors when defining it as static scan_algo oa_select_scan_algo(...
-static void oa_move_map(Vector3f& new_map_origin);
-static int16_t oa_check_object_in_map(float &Ay, float &Az);
+static void oa_move_map(int8_t scheduler_step);
+static void oa_check_object_in_map(int8_t scheduler_step);
 static float oa_max_vector_abs_value(const Vector3f& v);
 static void oa_run_scan_algo(int16_t &scan_algo, float &Ay, float &Az);
 static void oa_gimbal_control(int16_t &scan_algo, float &Az);

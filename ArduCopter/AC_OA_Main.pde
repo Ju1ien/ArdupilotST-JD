@@ -60,7 +60,9 @@ static int16_t last_scan_algo=100;          // 100 means nothing, that's require
 static int16_t scan_step=0;
 static bool use_ef_or_bf_gimbal_angles;        // EF = 0, BF = 1
 static bool gimbal_control_lock = false;    // Prevent the gimbal to receive a new control command until de lrf didn't return the measure of the current position
-        
+
+static float Ay;                           // EF copter velocity vector rising angle. in Rad
+static float Az;                           // EF copter velocity vector yaw angle. in Rad        
 static float uav_y_reduced_inclination;    // in rad. UAV inclination reduced to Y axis
 //static float uav_x_reduced_inclination;    // in rad. UAV inclination reduced to X axis
 static float S_proj;                       // in cm. UAV size (* safety factor) projected on the tilt axis
@@ -91,9 +93,18 @@ static bool object_detected;
 // commenté pour debug static const Vector3f& oa_copter_pos = inertial_nav.get_position();      // cm from home. Current copter pos
 //A suppr car vel anticipée sera utilisée. commenté pour debug static const Vector3f& vel = inertial_nav.get_velocity();                // cm/s. Current copter vel
 static Vector3f oa_copter_pos;// = {0.0f,0.0f,0.0f}; //debug
-static Vector3f vel;    //debug
+static Vector3f vel;
 static float vel_xy;
-    
+
+// local variables converted to static global ones to allow splitting the code
+// oa_update_map_from_copter_pos_and_vel()
+static Vector3f oa_new_map_origin;
+// oa_move_map()
+static int x;
+// oa_check_object_in_map
+static int cell_status[OA_MAP_SIZE_X][3];  // For each check step in the map, we store the numbers of cell with values 0, 1 or 2 (that's why there are 3 columns and the maximum pitch number possible as rows)
+static int iter_m;
+
 
     //OA functions
 
@@ -172,8 +183,6 @@ static void oa_init()
 static void oa_run()
 {
     // variables declaration
-    float Ay;                           // EF copter velocity vector rising angle. in Rad
-    float Az;                           // EF copter velocity vector yaw angle. in Rad
     int16_t scan_algo_g1;                      // Scan algorithm selected for gimbal 1
     uint32_t dt;    
 
@@ -231,11 +240,13 @@ static void oa_run()
         
         oa_init();
         oa_initialized = true;
-        return;     // init takes much more time than allowed so return immediatelly after init.
         
         test_dt_1 = micros() - test_dt_1;               //debug
         cliSerial->printf_P(PSTR("oa_init: %ld µs\n"),  //debug
 					test_dt_1);                         //debug
+        
+        return;     // init takes much more time than allowed so return immediatelly after init.
+        
         }
     }
     
@@ -245,126 +256,149 @@ static void oa_run()
         if(!oa_use_map){
             //oa_init(); A voir si nécessaire. le problème c'est qu'on RAZ tout le mapping même sur une micro perte du signal, c dommage!
             oa_use_map = true;
+            oa_scheduler_step = 0;
         }
     }else{
         oa_use_map = false;
+        oa_scheduler_step = 0;
     }
     
-    // TO-DO
-    // Gérer en switch/case avec des taux de refresh différents en fonction des perf requises par le code
+    // scheduler will be usefull only if map is used to keep low execution time per loop (around 500-700µs). no map = no scheduler (step 1 only)
+    
+    // reset oa_scheduler if finished or in case of bad step (normally never)
+    if((oa_scheduler_step < 0)||(oa_scheduler_step>10)) oa_scheduler_step=0;
+    // increment scheduler step
+    oa_scheduler_step++;
     
     // 0-IDENTIFY MOVING DIRECTION AND ANGLES RELATED TO EARTH.
     // voir pour utiliser desired_vel si en loiter... ANTICIPATION du mouvement
     // ou calculer cette vitesse à partir des accélérations et/ou des commandes de l'utilisateur
-    vel_xy = pythagorous2(vel.x, vel.y);
-    Az = fast_atan2(vel.y, vel.x);                      // Rad value [-PI;PI]
-    Ay = fast_atan2(vel.z, vel_xy); // Rad value [0-PI/4;PI+PI/4] 0->180 +/- Max_Copter_Angles. faux, on peut avoir -pi/2 si on descend uniquement
-    // Attention pour Ay borner les valeurs car si négatives, le capteur ne pourra pas vérifier l'absence d'objets. Utiliser un sonar sous le drone plutot
-    // faire un constrain ou utiliser cette valeur pour déterminer si l'utilisation du mapping est possible et l'algo de scan approprié
-    
-    // Identify path direction and window + copter attitude
-    uav_y_reduced_inclination = ahrs.pitch*cosf(wrap_PI(ahrs.yaw-Az)) + ahrs.roll*sinf(wrap_PI(ahrs.yaw-Az));     // in rad. UAV inclination reduced to Y axis
-    //uav_x_reduced_inclination = -ahrs.pitch*sinf(wrap_PI(ahrs.yaw-Az)) + ahrs.roll*cosf(wrap_PI(ahrs.yaw-Az));    // Not used, to comment... in rad. UAV inclination reduced to X axis
-    S_proj = oa_copter_size_factor*(fabs(COPTER_HEIGHT*cosf(wrap_PI(Ay-uav_y_reduced_inclination)))+fabs(COPTER_DIAMETER*sinf(wrap_PI(Ay-uav_y_reduced_inclination)))); // in cm. UAV size projected on the tilt axis
-    W_proj = oa_copter_size_factor*COPTER_DIAMETER;   // in cm. UAV size projected on the pan axis
+    if(oa_scheduler_step == 1){
+        vel_xy = pythagorous2(vel.x, vel.y);
+        Az = fast_atan2(vel.y, vel.x);                      // Rad value [-PI;PI]
+        Ay = fast_atan2(vel.z, vel_xy); // Rad value [0-PI/4;PI+PI/4] 0->180 +/- Max_Copter_Angles. faux, on peut avoir -pi/2 si on descend uniquement
+        // Attention pour Ay borner les valeurs car si négatives, le capteur ne pourra pas vérifier l'absence d'objets. Utiliser un sonar sous le drone plutot
+        // faire un constrain ou utiliser cette valeur pour déterminer si l'utilisation du mapping est possible et l'algo de scan approprié
+        
+        // Identify path direction and window + copter attitude
+        uav_y_reduced_inclination = ahrs.pitch*cosf(wrap_PI(ahrs.yaw-Az)) + ahrs.roll*sinf(wrap_PI(ahrs.yaw-Az));     // in rad. UAV inclination reduced to Y axis
+        //uav_x_reduced_inclination = -ahrs.pitch*sinf(wrap_PI(ahrs.yaw-Az)) + ahrs.roll*cosf(wrap_PI(ahrs.yaw-Az));    // Not used, to comment... in rad. UAV inclination reduced to X axis
+        S_proj = oa_copter_size_factor*(fabs(COPTER_HEIGHT*cosf(wrap_PI(Ay-uav_y_reduced_inclination)))+fabs(COPTER_DIAMETER*sinf(wrap_PI(Ay-uav_y_reduced_inclination)))); // in cm. UAV size projected on the tilt axis
+        W_proj = oa_copter_size_factor*COPTER_DIAMETER;   // in cm. UAV size projected on the pan axis
 
-    cliSerial->printf_P(PSTR("vel.x = %f, vel.y = %f, vel.z = %f\n"),      //debug
-                                vel.x,
-                                vel.y,
-                                vel.z);
-    cliSerial->printf_P(PSTR("Az = %f, Ay = %f\n"),      //debug
-                                Az,
-                                Ay);
-                                
-    /*cliSerial->printf_P(PSTR("S_proj = %f, W_proj = %f, Y = %f\n"),      //debug
-                                S_proj,
-                                W_proj,
-                                uav_y_reduced_inclination);*/
-                                
-    cliSerial->printf_P(PSTR("Yaw = %ld cdeg, Pitch = %ld cdeg, Roll = %ld cdeg\n"),      //debug
-                                ahrs.yaw_sensor,
-                                ahrs.pitch_sensor,
-                                ahrs.roll_sensor);
-                                
-    
+        cliSerial->printf_P(PSTR("vel.x = %f, vel.y = %f, vel.z = %f\n"),      //debug
+                                    vel.x,
+                                    vel.y,
+                                    vel.z);
+        cliSerial->printf_P(PSTR("Az = %f, Ay = %f\n"),      //debug
+                                    Az,
+                                    Ay);
+                                    
+        /*cliSerial->printf_P(PSTR("S_proj = %f, W_proj = %f, Y = %f\n"),      //debug
+                                    S_proj,
+                                    W_proj,
+                                    uav_y_reduced_inclination);*/
+                                    
+        cliSerial->printf_P(PSTR("Yaw = %ld cdeg, Pitch = %ld cdeg, Roll = %ld cdeg\n"),      //debug
+                                    ahrs.yaw_sensor,
+                                    ahrs.pitch_sensor,
+                                    ahrs.roll_sensor);
+                                    
+    }
     // 1-UPDATE MAP FROM COPTER NEW POSITION
     if((oa_use_map) || (debug_always_true)){                       //debug
-        if (test_rc5_4){                                    //debug
-        test_dt_2 = micros();                               //debug
+        if(oa_scheduler_step == 1){
+            //if (test_rc5_4){                                    //debug
+            test_dt_2 = micros();                               //debug
+            
+            oa_update_map_from_copter_pos_and_vel();
+            
+            test_dt_2 = micros() - test_dt_2;                   //debug
+            cliSerial->printf_P(PSTR("oa_update_map_from_copter_pos_and_vel: %ld µs\n"),      //debug
+                        test_dt_2);                             //debug
+            //}
+        }        
         
-        oa_update_map_from_copter_pos_and_vel();
-        
-        test_dt_2 = micros() - test_dt_2;                   //debug
-        cliSerial->printf_P(PSTR("oa_update_map_from_copter_pos_and_vel: %ld µs\n"),      //debug
-					test_dt_2);                             //debug
+        if(oa_scheduler_step <= 5){        
+            test_dt_2 = micros();       //debug
+            // Move map table if new map_origin is different from the previous one
+            oa_move_map(oa_scheduler_step);
+            
+            test_dt_2 = micros() - test_dt_2;                   //debug
+            cliSerial->printf_P(PSTR("oa_move_map: %ld µs\n"),      //debug
+                        test_dt_2);                             //debug
         }
-    // Update copter map index (x/y/z index of the copter in mapping table)
-        /*copter_map_index.x = round(floor(oa_copter_pos.x/OA_MAP_RES) - oa_map_origin.x/OA_MAP_RES);
-        copter_map_index.y = round(floor(oa_copter_pos.y/OA_MAP_RES) - oa_map_origin.y/OA_MAP_RES);
-        copter_map_index.z = round(floor(oa_copter_pos.z/OA_MAP_RES) - oa_map_origin.z/OA_MAP_RES);*/
-        copter_map_index.x = (oa_copter_pos.x - oa_map_origin.x)/OA_MAP_RES;
-        copter_map_index.y = (oa_copter_pos.y - oa_map_origin.y)/OA_MAP_RES;
-        copter_map_index.z = (oa_copter_pos.z - oa_map_origin.z)/OA_MAP_RES;
         
-        /*cliSerial->printf_P(PSTR("copter_map_index.x = %f, copter_map_index.y = %f, copter_map_index.z = %f\n"),      //debug
-        copter_map_index.x,
-        copter_map_index.y,
-        copter_map_index.z);
-        
-        cliSerial->printf_P(PSTR("oa_copter_pos.x = %f, oa_copter_pos.y = %f, oa_copter_pos.z = %f\n"),      //debug
-        oa_copter_pos.x,
-        oa_copter_pos.y,
-        oa_copter_pos.z);
-        
-        cliSerial->printf_P(PSTR("oa_map_origin.x = %f, oa_map_origin.y = %f, oa_map_origin.z = %f\n"),      //debug
-        oa_map_origin.x,
-        oa_map_origin.y,
-        oa_map_origin.z);*/
-  
-    // 2-UPDATE MAP WITH NEW LRF READ
-    // Check if servo had enough time to reach it's target control angles
-        if (test_rc5_5){                                    //debug
-        test_dt_3 = micros();                               //debug
-        
-        //to-do: optimiser le sequencement de la mesure et maj du mapping, cf ici
-        // https://groups.google.com/forum/#!topic/pulsedlight3d/Xi3AjrWUE50
-        
-        dt = millis() - last_gimbal_control_time; // in ms. if OA in lib, use uint32_t now = hal.scheduler->millis() instead
-        if((fabs(bf_gimbal_Ay - last_bf_gimbal_Ay)*1000/SERVO_TURN_RATE < dt) && (fabs(bf_gimbal_Az - last_bf_gimbal_Az)*1000/(SERVO_TURN_RATE*2) < dt)){  // ajouter un coeff de sécurité ET voir comment le dialogue avec le lidar permet de valider une lecture seulement aaprès le bon positionnement du servo
-            //TO-DO: attention, la commande I2C d'acquisition de mesure est envoyée automatiquement à la fin der la lecture précédente, on ne va donc pas lire la bonne valeur mais certainement une valeur d'une position intermédiaire. revoir la librairie rangefinder en conséquent
-            if(oa_lrf_read()){  // we wait as well for a new read of the LRF before updating the map
-                if(lrf_dist != 0) oa_update_map_from_lrf_read();    // update map only if the lrf measure is correct - to avoid fake measures of copter prop for example
-                last_bf_gimbal_Ay = bf_gimbal_Ay;     
-                last_bf_gimbal_Az = bf_gimbal_Az;  
-                gimbal_control_lock = false;
+        if(oa_scheduler_step == 6){
+            // Update copter map index (x/y/z index of the copter in mapping table)
+            /*copter_map_index.x = round(floor(oa_copter_pos.x/OA_MAP_RES) - oa_map_origin.x/OA_MAP_RES);
+            copter_map_index.y = round(floor(oa_copter_pos.y/OA_MAP_RES) - oa_map_origin.y/OA_MAP_RES);
+            copter_map_index.z = round(floor(oa_copter_pos.z/OA_MAP_RES) - oa_map_origin.z/OA_MAP_RES);*/
+            copter_map_index.x = (oa_copter_pos.x - oa_map_origin.x)/OA_MAP_RES;
+            copter_map_index.y = (oa_copter_pos.y - oa_map_origin.y)/OA_MAP_RES;
+            copter_map_index.z = (oa_copter_pos.z - oa_map_origin.z)/OA_MAP_RES;
+            
+            /*cliSerial->printf_P(PSTR("copter_map_index.x = %f, copter_map_index.y = %f, copter_map_index.z = %f\n"),      //debug
+            copter_map_index.x,
+            copter_map_index.y,
+            copter_map_index.z);
+            
+            cliSerial->printf_P(PSTR("oa_copter_pos.x = %f, oa_copter_pos.y = %f, oa_copter_pos.z = %f\n"),      //debug
+            oa_copter_pos.x,
+            oa_copter_pos.y,
+            oa_copter_pos.z);
+            
+            cliSerial->printf_P(PSTR("oa_map_origin.x = %f, oa_map_origin.y = %f, oa_map_origin.z = %f\n"),      //debug
+            oa_map_origin.x,
+            oa_map_origin.y,
+            oa_map_origin.z);*/
+      
+        // 2-UPDATE MAP WITH NEW LRF READ
+        // Check if servo had enough time to reach it's target control angles
+            //if (test_rc5_5){                                    //debug
+            test_dt_3 = micros();                               //debug
+            
+            //to-do: optimiser le sequencement de la mesure et maj du mapping, cf ici
+            // https://groups.google.com/forum/#!topic/pulsedlight3d/Xi3AjrWUE50
+            
+            dt = millis() - last_gimbal_control_time; // in ms. if OA in lib, use uint32_t now = hal.scheduler->millis() instead
+            if((fabs(bf_gimbal_Ay - last_bf_gimbal_Ay)*1000/SERVO_TURN_RATE < dt) && (fabs(bf_gimbal_Az - last_bf_gimbal_Az)*1000/(SERVO_TURN_RATE*2) < dt)){  // ajouter un coeff de sécurité ET voir comment le dialogue avec le lidar permet de valider une lecture seulement aaprès le bon positionnement du servo
+                //TO-DO: attention, la commande I2C d'acquisition de mesure est envoyée automatiquement à la fin der la lecture précédente, on ne va donc pas lire la bonne valeur mais certainement une valeur d'une position intermédiaire. revoir la librairie rangefinder en conséquent
+                if(oa_lrf_read()){  // we wait as well for a new read of the LRF before updating the map
+                    if(lrf_dist != 0) oa_update_map_from_lrf_read();    // update map only if the lrf measure is correct - to avoid fake measures of copter prop for example
+                    last_bf_gimbal_Ay = bf_gimbal_Ay;     
+                    last_bf_gimbal_Az = bf_gimbal_Az;  
+                    gimbal_control_lock = false;
+                }
             }
-        }
-        
-        test_dt_3 = micros() - test_dt_3;                   //debug
-        cliSerial->printf_P(PSTR("oa_update_map_from_lrf_read: %ld µs\n"),      //debug
-					test_dt_3);                             //debug
+            
+            test_dt_3 = micros() - test_dt_3;                   //debug
+            cliSerial->printf_P(PSTR("oa_update_map_from_lrf_read: %ld µs\n"),      //debug
+                        test_dt_3);                             //debug
+            //}
         }
         
     // 4-IDENTIFY PATH AND COPTER ATTITUDE
-    // Groupé directement avec 5
     // 5-CHECK IF PATH IS FREE FROM ANY OBJECT
-        // Check path windows from map
-        
-        if (test_rc5_6){                                    //debug
-        test_dt_4 = micros();                               //debug
-        
-        safe_dist = oa_check_object_in_map(Ay, Az); // Ne pas exécuter si vel est nul (division par 0 autrement)
-        //to-do : voir pour bufferiser les 10/20/30? dernières lectures du capteur suivant l'algo de scan (SCANNABLE_HORIZONTAL/VERTICAL)
-        //et en prendre la minimale. Si le safe_dist retourné par oa_check_object_in_map() est lié à un manque de scan et non à une détection d'object
-        //prendre le max du buffer et du mapping pour se donner plus de marge.
-        // normalement ça devrait être bon car vecteur vitesse est anticipé, donc les scans bufferisés sont l'image de ce qu'il y a sur la trajectoire a l'instant t
+        if((oa_scheduler_step >= 7)&&(oa_scheduler_step<=10)){
+            // Check path windows from map
+            
+            //if (test_rc5_6){                                    //debug
+            test_dt_4 = micros();                               //debug
+            
+            oa_check_object_in_map(oa_scheduler_step-6); // pass scheduler step value from 1 to 4
+            //to-do : voir pour bufferiser les 10/20/30? dernières lectures du capteur suivant l'algo de scan (SCANNABLE_HORIZONTAL/VERTICAL)
+            //et en prendre la minimale. Si le safe_dist retourné par oa_check_object_in_map() est lié à un manque de scan et non à une détection d'object
+            //prendre le max du buffer et du mapping pour se donner plus de marge.
+            // normalement ça devrait être bon car vecteur vitesse est anticipé, donc les scans bufferisés sont l'image de ce qu'il y a sur la trajectoire a l'instant t
 
-        test_dt_4 = micros() - test_dt_4;                   //debug
-        cliSerial->printf_P(PSTR("Safe dist = %d cm\n"),      //debug
-                   safe_dist);
-    
-        cliSerial->printf_P(PSTR("oa_check_object_in_map: %ld µs\n"),      //debug
-					test_dt_4);                             //debug
+            test_dt_4 = micros() - test_dt_4;                   //debug
+            cliSerial->printf_P(PSTR("Safe dist = %d cm\n"),      //debug
+                       safe_dist);
+        
+            cliSerial->printf_P(PSTR("oa_check_object_in_map: %ld µs\n"),      //debug
+                        test_dt_4);                             //debug
+            //}
         }
         
         
@@ -429,7 +463,6 @@ static void oa_run()
 // oa_update_map_from_copter_pos_and_vel - Updates OA_Map from the new copter position and its velocity vector (in order to have more map head romm in the moving direction)
 static void oa_update_map_from_copter_pos_and_vel()
 { 
-    Vector3f oa_new_map_origin;
     Vector3f stopping_point;    
     Vector3f tmp_stopping_dist;    
     
@@ -485,23 +518,14 @@ static void oa_update_map_from_copter_pos_and_vel()
             oa_new_map_origin.y,
             oa_new_map_origin.z);
     */
-    
-    // Move map table if new map_origin is different from the previous one
-    oa_move_map(oa_new_map_origin);
-    
-    // Set the new map origin
-    oa_map_origin = oa_new_map_origin;
-    
-    // si on décale, alors on redéfini l'ancienne pos copter
-    //pour chaque axe, ex oa_last_copter_pos.x = oa_copter_pos.x; 
 }
 
 // oa_move_map - Move the values of the map table according to the new map origin.
-static void oa_move_map(Vector3f& new_map_origin)
+static void oa_move_map(int8_t scheduler_step)
 {
-    int offset_x = (int)round((new_map_origin.x-oa_map_origin.x)/OA_MAP_RES);
-    int offset_y = (int)round((new_map_origin.y-oa_map_origin.y)/OA_MAP_RES);
-    int offset_z = (int)round((new_map_origin.z-oa_map_origin.z)/OA_MAP_RES);    
+    int offset_x = (int)round((oa_new_map_origin.x-oa_map_origin.x)/OA_MAP_RES);
+    int offset_y = (int)round((oa_new_map_origin.y-oa_map_origin.y)/OA_MAP_RES);
+    int offset_z = (int)round((oa_new_map_origin.z-oa_map_origin.z)/OA_MAP_RES);    
     
     //simulate offsets
     //0 +1000 -> 0 +20 scaling
@@ -517,7 +541,7 @@ static void oa_move_map(Vector3f& new_map_origin)
     
     if(offset_x==0 && offset_y==0 && offset_z==0) return;    //If nothing to move, just return
 
-    int x,y,z,x_init,y_init,z_init,x_stop,y_stop,z_stop,inc_x,inc_y,inc_z,prev_x,prev_y,prev_z;
+    int y,z,x_init,y_init,z_init,x_stop,y_stop,z_stop,inc_x,inc_y,inc_z,prev_x,prev_y,prev_z;   // x declared static to allow function splitting
     bool out_of_map_x, out_of_map_y, out_of_map_z;
     /*int inc_x = sgn(offset_x);
     int inc_y = sgn(offset_y);
@@ -555,8 +579,16 @@ static void oa_move_map(Vector3f& new_map_origin)
 
     int test_map_1=0, test_map_move_pt=0;//debug
     
-    x = x_init;
-    while(x!=x_stop){
+    if(scheduler_step == 1){
+        x = x_init;
+    }
+    
+    //split function in 5 to limit the execution time
+    int split_threshold = 1+OA_MAP_SIZE_X/5; //+1 to because int division will truncate the result.
+    int split_iter = 0;
+    
+    
+    while((x!=x_stop)&&(split_iter<split_threshold)){
         prev_x = x+offset_x;
         out_of_map_x = (prev_x<0)||(prev_x>=OA_MAP_SIZE_X);
         
@@ -604,7 +636,16 @@ static void oa_move_map(Vector3f& new_map_origin)
             y += inc_y;
         }
         x += inc_x;
+        split_iter++;
     }
+    
+    if(scheduler_step == 5){
+        // Set the new map origin
+        oa_map_origin = oa_new_map_origin;
+    }
+    // si on décale, alors on redéfini l'ancienne pos copter
+    //pour chaque axe, ex oa_last_copter_pos.x = oa_copter_pos.x; 
+    
     /*
     cliSerial->printf_P(PSTR("test_map_1 = %d, test_map_move_pt = %d\n"),      //debug
                         test_map_1,
@@ -738,12 +779,12 @@ static void oa_update_map_from_lrf_read()
 }
 
 // oa_check_object_in_map - Looks for any object in the map from the copter position and moving direction
-static int16_t oa_check_object_in_map(float &Ay, float &Az)
+static void oa_check_object_in_map(int8_t scheduler_step)
 {   
     bool stop_check;
     int stop_check_cnt;
-    int i,j,x,y,z,m,m_sgn,n,n_sgn,iter_m,iter_n,nb_total_cells=0;
-    int cell_status[OA_MAP_SIZE_X][3];  // For each check step in the map, we store the numbers of cell with values 0, 1 or 2 (that's why there are 3 columns and the maximum pitch number possible as rows)
+    int i,j,x,y,z,m,m_sgn,n,n_sgn,iter_n,nb_total_cells=0;   //iter_m is declared static to allow function splitting
+    //int cell_status[OA_MAP_SIZE_X][3];  // DECLARED STATIC FOR FUNCTION SPLITTING. For each check step in the map, we store the numbers of cell with values 0, 1 or 2 (that's why there are 3 columns and the maximum pitch number possible as rows)
     float cos_Ay = cosf(Ay);
     float sin_Ay = sinf(Ay);
     float cos_Az = cosf(Az);
@@ -751,7 +792,6 @@ static int16_t oa_check_object_in_map(float &Ay, float &Az)
     Vector3f Pz, Pxy, A, B, C, D;
     Vector3f check_vector_origin, orig_xy_pitch, orig_z_pitch;
     int nb_xy_cells, nb_z_cells;
-    float divider;  // voir si utilisé
     float temp1, temp2;    //used to reduce the memory used
     float A_len, B_len, Pz_len, check_pitch_len, check_pitch_xy_len, Pz_case_3, Pz_case_4;
     float C_len;
@@ -769,21 +809,25 @@ static int16_t oa_check_object_in_map(float &Ay, float &Az)
                                 sin_Ay);
         
     // If no velocity, just exit as we don't know where to look at. Avoid division by 0 as well.
-    if(vel.length()<OA_VEL_0) return -1;
+    if(vel.length()<OA_VEL_0){
+        safe_dist = -1;
+        return;
+    }
     
-    
-    // Init cell_status table
-    for (i=0; i<OA_MAP_SIZE_X; i++){
-        for (j=0; j<3; j++){
-            cell_status[i][j] = 0;
+    if(scheduler_step == 1){
+        // Init cell_status table
+        for (i=0; i<OA_MAP_SIZE_X; i++){
+            for (j=0; j<3; j++){
+                cell_status[i][j] = 0;
+            }
         }
+        // Init iter_m for function splitting
+        iter_m=0;
     }
               
     Vector3f check_pitch;
     // Resize this pitch vector, 
-    check_pitch = vel/oa_max_vector_abs_value(vel);  // Voir pour intégrer ici des anticipations de mouvement (acc, commandes pilote..). Utiliser pour cela desired velocity!
-                    // dans ce cas il faut recalcuiler Az et Ay par rapport à ce nouveau vecteur et non à partir de la vitesse (vel)
-                    // éviter les divisions par 0. Si cette portion du code n'est pas exécutée quand vel=0, c'est ok
+    check_pitch = vel/oa_max_vector_abs_value(vel);
 
     /*cliSerial->printf_P(PSTR("check_pitch.x = %f, check_pitch.y = %f, check_pitch.z = %f\n"),      //debug
             check_pitch.x,
@@ -813,21 +857,14 @@ A SUPPRIMER ULTERIEUREMENT
 FIN DE SUPPRESSION*/
 
     // Il faut définir ici tous les points d'origine des vecteurs à vérifier (nombre et pos)
-      /* example de code
-     // Update copter map index (x/y/z index of the copter in mapping table)
-        copter_map_index.x = (int)round(floor(oa_copter_pos.x/OA_MAP_RES) - oa_map_origin.x/OA_MAP_RES);
-        copter_map_index.y = (int)round(floor(oa_copter_pos.y/OA_MAP_RES) - oa_map_origin.y/OA_MAP_RES);
-        copter_map_index.z = (int)round(floor(oa_copter_pos.z/OA_MAP_RES) - oa_map_origin.z/OA_MAP_RES);
-        */
+
     
     if(fabs(cos_Az) >= HALF_SQRT_2){     // means if Az € [-45;45] U [135;225]
     //if(fabs(check_pitch.x) >= fabs(check_pitch.y)){      // same condition, use the less long to compute
-        //divider = cos_Az; voir si utilisé
         Pxy.x = -cos_Az*sin_Az;
         Pxy.y = cos_Az*cos_Az;
         temp1 = sin_Az;
     }else{
-        //divider = sin_Az; voir si utilisé
         Pxy.x = sin_Az*sin_Az;
         Pxy.y = -cos_Az*sin_Az;
         temp1 = cos_Az;
@@ -861,8 +898,13 @@ FIN DE SUPPRESSION*/
         nb_xy_cells,
         nb_z_cells);*/
     
-    // define check_vectors origins      
-    for (iter_m=0; iter_m<=nb_xy_cells; iter_m++){  // xy path cells check
+    // define check_vectors origins and check in map
+    //split function in 4 to limit the execution time
+    int split_threshold = (int)ceil((float)nb_xy_cells/4.0f);
+    int split_iter = 0;
+    
+      //exemple  while((x!=x_stop)&&(split_iter<split_threshold)){
+    while((iter_m<=nb_xy_cells)&&(split_iter<split_threshold)){     // xy path cells check
         m = iter_m-nb_xy_cells/2;
         m_sgn = sgn(m);                     // sign of m = 1 or -1
         A_len = fabs(fmod(m*temp1, B_len)); // fabs() is used in case of fmod would return negative values (excel doesn't during simulations). Normally we should do fabs(m*temp1), excel needs it but here it seems to be ok without
@@ -905,7 +947,7 @@ FIN DE SUPPRESSION*/
                     check_vector_origin.y,
                     check_vector_origin.z);*/
     
-            //pour chacun de ces vecteurs, procéder à la vérif
+            //for each vector, proceed to check
             stop_check_cnt = 0;
             for (i=0; stop_check_cnt<3; i++){    // ne pas arreter au premier stop_check car on pourrait avoir une origine de vecteur en-dehors du mapping mais ses pas suivants dans le mapping
                 x = (int)floor(check_vector_origin.x + check_pitch.x*i);
@@ -921,35 +963,39 @@ FIN DE SUPPRESSION*/
                 }
             }
         }
+        iter_m++;
+        split_iter++;
     }
     
-    // Analyse cell_status table and find out the minimal safe distance
-    // This distance will be used to limit copter position and velocity and also to focus the scan algo on the right window (wider scan beam with shortest distance)
-    stop_check = false;
-    for (i=0; (i<OA_MAP_SIZE_X) && !stop_check; i++){
-        //Values: 0=No object, 1=Not sure-to check, 2=Object detected
-        nb_total_cells = cell_status[i][0]+cell_status[i][1]+cell_status[i][2];
-        if((nb_total_cells>0) && (cell_status[i][2]==0)){   // there are checked cells and no object for this step. Let's check now the ratio of safe cells
-                                                            // to-do : check if we could allow a couple of objects or not because it will be hard to clear a fake object detection in the mapping table due to low scan rate...
-            object_detected = false;
-            //required to be safe: cell_status[i][0] / nb_total_cells >= OA_CHECK_SAFE_RATIO
-            if(cell_status[i][0] < nb_total_cells*OA_CHECK_SAFE_RATIO){
+    if(scheduler_step == 4){
+        // Analyse cell_status table and find out the minimal safe distance
+        // This distance will be used to limit copter position and velocity and also to focus the scan algo on the right window (wider scan beam with shortest distance)
+        stop_check = false;
+        for (i=0; (i<OA_MAP_SIZE_X) && !stop_check; i++){
+            //Values: 0=No object, 1=Not sure-to check, 2=Object detected
+            nb_total_cells = cell_status[i][0]+cell_status[i][1]+cell_status[i][2];
+            if((nb_total_cells>0) && (cell_status[i][2]==0)){   // there are checked cells and no object for this step. Let's check now the ratio of safe cells
+                                                                // to-do : check if we could allow a couple of objects or not because it will be hard to clear a fake object detection in the mapping table due to low scan rate...
+                object_detected = false;
+                //required to be safe: cell_status[i][0] / nb_total_cells >= OA_CHECK_SAFE_RATIO
+                if(cell_status[i][0] < nb_total_cells*OA_CHECK_SAFE_RATIO){
+                    stop_check = true;
+                }
+            }else{
                 stop_check = true;
+                if(cell_status[i][2]>0) object_detected = true;
             }
-        }else{
-            stop_check = true;
-            if(cell_status[i][2]>0) object_detected = true;
-        }
-        
-        cliSerial->printf_P(PSTR("Cell_Status: i = %d, cell_status[i][0] = %d, cell_status[i][1] = %d, cell_status[i][2] = %d\n"),      //debug
-        i,
-        cell_status[i][0],
-        cell_status[i][1],
-        cell_status[i][2]);
-        
-        
-    } 
-    return (int)(check_pitch_len*(i-1)*OA_MAP_RES);  // cm  
+            
+            cliSerial->printf_P(PSTR("Cell_Status: i = %d, cell_status[i][0] = %d, cell_status[i][1] = %d, cell_status[i][2] = %d\n"),      //debug
+            i,
+            cell_status[i][0],
+            cell_status[i][1],
+            cell_status[i][2]);
+            
+            
+        } 
+        safe_dist = (int)max(0, (check_pitch_len*(i-1)*OA_MAP_RES));  // cm  
+    }
 }
 
 // oa_select_scan_algo - Returns the scan algo to run from the copter current state (vel and y_angle=Tilt_angle)
@@ -1366,7 +1412,11 @@ static bool oa_enabled()
 {
     //to-do : check here if everything works fine with OA and return its status
     //eg : if lrf does'nt work, or maybe a gimbal status depending on gimbals...
-    return true;
+    if(millis()-last_gimbal_control_time>2000){ //basically, if no gimbal update during at least 2s. could be reviewed in case of different gimbal management
+        return false;
+    }else{
+        return true;
+    }
 }
 
 // oa_is_object_detected - returns true if an object is detected or not. usefull to know if the safe distance should be used for vel limitation or stopping point
