@@ -32,12 +32,12 @@
 #define OA_MAP_SIZE_X       32      // nombre de cubes de mapping sur l'axe des X (lat)
 #define OA_MAP_SIZE_Y       32      // nombre de cubes de mapping sur l'axe des Y (lon)
 #define OA_MAP_SIZE_Z       16       // nombre de cubes de mapping sur l'axe des Z (alt)
-#define OA_MAP_RES          25      // in cm. côté du cube de mapping
-#define OA_MIN_DIST         100     // in cm. distance minimale d'approche (cela permet de fixer la limite de scan réalisable par la nacelle)
+#define OA_MAP_RES          50      // in cm. côté du cube de mapping
+#define OA_MIN_DIST         200     // in cm. distance minimale d'approche (cela permet de fixer la limite de scan réalisable par la nacelle)
 #define OA_CHECK_FACTOR     xxx   
-#define OA_CHECK_SAFE_RATIO 0.05f    // [0;1] for each check step of the map, the ratio of safe_cells/total_cells should be >= OA_CHECK_FACTOR to consider this step is safe
+#define OA_CHECK_SAFE_RATIO 0.1f    // [0;1] for each check step of the map, the ratio of safe_cells/total_cells should be >= OA_CHECK_FACTOR to consider this step is safe
                                     // it works while there is no object in any cell but only safe cell or unchecked cells
-#define OA_SCAN_RES  (0.4f*OA_MAP_RES)    // pitch distance relating to 
+#define OA_SCAN_RES  (0.4f*OA_MAP_RES)    // will define the lidar gimbal step. 0.4 ensures 1 or 2 scans per cell.
 
 // private functions
 static bool oa_lrf_read();

@@ -839,7 +839,7 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { userhook_SuperSlowLoop,400,   10 },
 #endif
 #if OA_ENABLED == ENABLED       //OA code
-    { oa_run,                133, 1000 },
+    { oa_run,                4, 1000 },
 #endif
 };
 #else

@@ -84,15 +84,16 @@ static Vector3f oa_last_copter_pos; // Inutile, à voir??? position du drone lor
 static int oa_min_dist = constrain_int16(OA_MIN_DIST, COPTER_DIAMETER/2+20, 300); // in cm. ensure we are in decent range: from prop guard to 3m
 static float oa_copter_size_factor = constrain_float(COPTER_SIZE_SAFETY_FACTOR, 1.0f, 4.0f);
 static int16_t lrf_dist;   // measure from lrf sensor (cm)
-static int16_t safe_dist;  // safe distance in the moving direction. (cm)
+static int16_t safe_dist=0;  // safe distance in the moving direction. (cm)
 static float stopping_dist; // in cm. distance between copter position and stopping point.updated by oa_update_map_from_copter_pos_and_vel().
 static Vector3f copter_map_index;  // index of the copter position in the mapping table. With a float value we are using the exact position of the copter in the cell.
 static bool object_detected;
 
 // to be declared unstatic later and passed though function param
-// commenté pour debug static const Vector3f& oa_copter_pos = inertial_nav.get_position();      // cm from home. Current copter pos
+// commenté pour debug 
+static const Vector3f& oa_copter_pos = inertial_nav.get_position();      // cm from home. Current copter pos
 //A suppr car vel anticipée sera utilisée. commenté pour debug static const Vector3f& vel = inertial_nav.get_velocity();                // cm/s. Current copter vel
-static Vector3f oa_copter_pos;// = {0.0f,0.0f,0.0f}; //debug
+//static Vector3f oa_copter_pos;// = {0.0f,0.0f,0.0f}; //créé pour debug
 static Vector3f vel;
 static float vel_xy;
 
@@ -218,9 +219,16 @@ static void oa_run()
     
     //simulate vel vector debug
     //0-1000 -> -20+20 scaling
-    vel.x = (float)(g.rc_6.control_in-500)*0.04f;
+    /*vel.x = (float)(g.rc_6.control_in-500)*0.04f;
     vel.y = (float)(g.rc_7.control_in-500)*0.04f;
-    vel.z = (float)(g.rc_8.control_in-500)*0.04f;
+    vel.z = (float)(g.rc_8.control_in-500)*0.04f;*/
+    
+   if(g.rc_5.control_in>500){ //debug
+        oa_is_used = true;
+    }else{
+        oa_is_used = false;
+        oa_lrf_read();
+    }
     
     // Enable/Disable OA
     if(!oa_is_used){
@@ -235,24 +243,24 @@ static void oa_run()
     
     if(!oa_initialized){
         
-        if (test_rc5_2){                                //debug
-        test_dt_1 = micros();                           //debug
+        //if (test_rc5_2){                                //debug
+        //test_dt_1 = micros();                           //debug
         
         oa_init();
         oa_initialized = true;
         
-        test_dt_1 = micros() - test_dt_1;               //debug
-        cliSerial->printf_P(PSTR("oa_init: %ld µs\n"),  //debug
-					test_dt_1);                         //debug
+        //test_dt_1 = micros() - test_dt_1;               //debug
+        //cliSerial->printf_P(PSTR("oa_init: %ld µs\n"),  //debug
+		//			test_dt_1);                         //debug
         
         return;     // init takes much more time than allowed so return immediatelly after init.
         
-        }
+        //}
     }
     
     // Si le GPS n'est pas disponible, le mapping n'est pas utilisable on se contentera de scanner autour de l'axe directeur
     // en enregistrant uniquement la distance min sure, distance min avec objet
-    if ((gps.status() >= AP_GPS::GPS_OK_FIX_2D)|| (debug_always_true)){   //debug suppr tjours vrai
+    if ((gps.status() >= AP_GPS::GPS_OK_FIX_2D)){//|| (debug_always_true)){   //debug suppr tjours vrai
         if(!oa_use_map){
             //oa_init(); A voir si nécessaire. le problème c'est qu'on RAZ tout le mapping même sur une micro perte du signal, c dommage!
             oa_use_map = true;
@@ -286,47 +294,47 @@ static void oa_run()
         S_proj = oa_copter_size_factor*(fabs(COPTER_HEIGHT*cosf(wrap_PI(Ay-uav_y_reduced_inclination)))+fabs(COPTER_DIAMETER*sinf(wrap_PI(Ay-uav_y_reduced_inclination)))); // in cm. UAV size projected on the tilt axis
         W_proj = oa_copter_size_factor*COPTER_DIAMETER;   // in cm. UAV size projected on the pan axis
 
-        cliSerial->printf_P(PSTR("vel.x = %f, vel.y = %f, vel.z = %f\n"),      //debug
+        /*cliSerial->printf_P(PSTR("vel.x = %f, vel.y = %f, vel.z = %f\n"),      //debug
                                     vel.x,
                                     vel.y,
                                     vel.z);
         cliSerial->printf_P(PSTR("Az = %f, Ay = %f\n"),      //debug
                                     Az,
-                                    Ay);
+                                    Ay);*/
                                     
         /*cliSerial->printf_P(PSTR("S_proj = %f, W_proj = %f, Y = %f\n"),      //debug
                                     S_proj,
                                     W_proj,
                                     uav_y_reduced_inclination);*/
                                     
-        cliSerial->printf_P(PSTR("Yaw = %ld cdeg, Pitch = %ld cdeg, Roll = %ld cdeg\n"),      //debug
+        /*cliSerial->printf_P(PSTR("Yaw = %ld cdeg, Pitch = %ld cdeg, Roll = %ld cdeg\n"),      //debug
                                     ahrs.yaw_sensor,
                                     ahrs.pitch_sensor,
-                                    ahrs.roll_sensor);
+                                    ahrs.roll_sensor);*/
                                     
     }
     // 1-UPDATE MAP FROM COPTER NEW POSITION
-    if((oa_use_map) || (debug_always_true)){                       //debug
+    if((oa_use_map)){// || (debug_always_true)){                       //debug
         if(oa_scheduler_step == 1){
             //if (test_rc5_4){                                    //debug
-            test_dt_2 = micros();                               //debug
+            //test_dt_2 = micros();                               //debug
             
             oa_update_map_from_copter_pos_and_vel();
             
-            test_dt_2 = micros() - test_dt_2;                   //debug
-            cliSerial->printf_P(PSTR("oa_update_map_from_copter_pos_and_vel: %ld µs\n"),      //debug
-                        test_dt_2);                             //debug
+            //test_dt_2 = micros() - test_dt_2;                   //debug
+            //cliSerial->printf_P(PSTR("oa_update_map_from_copter_pos_and_vel: %ld µs\n"),      //debug
+            //            test_dt_2);                             //debug
             //}
         }        
         
         if(oa_scheduler_step <= 5){        
-            test_dt_2 = micros();       //debug
+            //test_dt_2 = micros();       //debug
             // Move map table if new map_origin is different from the previous one
             oa_move_map(oa_scheduler_step);
             
-            test_dt_2 = micros() - test_dt_2;                   //debug
-            cliSerial->printf_P(PSTR("oa_move_map: %ld µs\n"),      //debug
-                        test_dt_2);                             //debug
+            //test_dt_2 = micros() - test_dt_2;                   //debug
+            //cliSerial->printf_P(PSTR("oa_move_map: %ld µs\n"),      //debug
+            //            test_dt_2);                             //debug
         }
         
         if(oa_scheduler_step == 6){
@@ -356,7 +364,7 @@ static void oa_run()
         // 2-UPDATE MAP WITH NEW LRF READ
         // Check if servo had enough time to reach it's target control angles
             //if (test_rc5_5){                                    //debug
-            test_dt_3 = micros();                               //debug
+            //test_dt_3 = micros();                               //debug
             
             //to-do: optimiser le sequencement de la mesure et maj du mapping, cf ici
             // https://groups.google.com/forum/#!topic/pulsedlight3d/Xi3AjrWUE50
@@ -372,9 +380,9 @@ static void oa_run()
                 }
             }
             
-            test_dt_3 = micros() - test_dt_3;                   //debug
-            cliSerial->printf_P(PSTR("oa_update_map_from_lrf_read: %ld µs\n"),      //debug
-                        test_dt_3);                             //debug
+            //test_dt_3 = micros() - test_dt_3;                   //debug
+            //cliSerial->printf_P(PSTR("oa_update_map_from_lrf_read: %ld µs\n"),      //debug
+            //            test_dt_3);                             //debug
             //}
         }
         
@@ -384,7 +392,7 @@ static void oa_run()
             // Check path windows from map
             
             //if (test_rc5_6){                                    //debug
-            test_dt_4 = micros();                               //debug
+            //test_dt_4 = micros();                               //debug
             
             oa_check_object_in_map(oa_scheduler_step-6); // pass scheduler step value from 1 to 4
             //to-do : voir pour bufferiser les 10/20/30? dernières lectures du capteur suivant l'algo de scan (SCANNABLE_HORIZONTAL/VERTICAL)
@@ -392,12 +400,12 @@ static void oa_run()
             //prendre le max du buffer et du mapping pour se donner plus de marge.
             // normalement ça devrait être bon car vecteur vitesse est anticipé, donc les scans bufferisés sont l'image de ce qu'il y a sur la trajectoire a l'instant t
 
-            test_dt_4 = micros() - test_dt_4;                   //debug
-            cliSerial->printf_P(PSTR("Safe dist = %d cm\n"),      //debug
-                       safe_dist);
+            //test_dt_4 = micros() - test_dt_4;                   //debug
+            //cliSerial->printf_P(PSTR("Safe dist = %d cm\n"),      //debug
+            //           safe_dist);
         
-            cliSerial->printf_P(PSTR("oa_check_object_in_map: %ld µs\n"),      //debug
-                        test_dt_4);                             //debug
+            //cliSerial->printf_P(PSTR("oa_check_object_in_map: %ld µs\n"),      //debug
+            //            test_dt_4);                             //debug
             //}
         }
         
@@ -415,7 +423,7 @@ static void oa_run()
     
     if(!gimbal_control_lock){
         // 6-SELECT SCAN ALGO FROM THE COPTER ATTITUDE
-        test_dt_4 = micros();                               //debug
+        //test_dt_4 = micros();                               //debug
 
         scan_algo_g1 = oa_select_scan_algo(Ay);
 
@@ -428,16 +436,16 @@ static void oa_run()
         //if(gimbal_control_lock) ... //on développe la suite uniquement si la nacelle a été libérée. autrement cela n'est pas nécessaire
         //ef_gimbal_Ay = to define;       //Rad for computations. But Deg EF control_angles for gimbal stabilized tilt
         //ef_gimbal_Az = to define;       //Rad for computations. But Deg EF control_angles for gimbal stabilized pan
-        if (test_rc5_5){                                    //debug
+        //if (test_rc5_5){                                    //debug
         oa_run_scan_algo(scan_algo_g1, Ay, Az);
-        }
+        //}
         // 8-UPDATE GIMBAL EF CONTROL ANGLES
         oa_gimbal_control(scan_algo_g1, Az);
         //to-do : revoir les paramètres de cette fonction car le scan algo n'est plus utilisé, Az à voir aussi...
         
-        test_dt_4 = micros() - test_dt_4;                   //debug
-        cliSerial->printf_P(PSTR("select_sacn_algo + run + gimbal_control: %ld µs\n"),      //debug
-					test_dt_4);                             //debug
+        //test_dt_4 = micros() - test_dt_4;                   //debug
+        //cliSerial->printf_P(PSTR("select_sacn_algo + run + gimbal_control: %ld µs\n"),      //debug
+		//			test_dt_4);                             //debug
         
         
         // Lancer un chrono pour savoir depuis combien de temps l'ordre a été envoyé aux servo et ainsi évaluer leur position d'après leur datasheet (°/s)
@@ -467,8 +475,10 @@ static void oa_update_map_from_copter_pos_and_vel()
     Vector3f tmp_stopping_dist;    
     
     // Update stopping point from copter pos and velocity
-    //commenté pour debug pos_control.get_stopping_point_xy(stopping_point);
-    //commenté pour debug pos_control.get_stopping_point_z(stopping_point);
+    //commenté pour debug 
+    pos_control.get_stopping_point_xy(stopping_point);
+    //commenté pour debug 
+    pos_control.get_stopping_point_z(stopping_point);
     
     //simulate stopping point debug
     //0-1000 -> -1000+1000 scaling
@@ -476,10 +486,10 @@ static void oa_update_map_from_copter_pos_and_vel()
     stopping_point.y = (float)(g.rc_7.control_in-500)*2.0f;
     stopping_point.z = (float)(g.rc_8.control_in-500)*2.0f;*/
     
-    stopping_point.x = 0;  //debug
-    stopping_point.y = 0;//debug
-    stopping_point.z = 0;//debug
-    
+    /*stopping_point.x = 0;  //créé pour debug
+    stopping_point.y = 0;//créé pour debug
+    stopping_point.z = 0;//créé pour debug
+    */
     // update stopping distance
     tmp_stopping_dist = stopping_point - oa_copter_pos;
     stopping_dist = tmp_stopping_dist.length();
@@ -529,7 +539,7 @@ static void oa_move_map(int8_t scheduler_step)
     
     //simulate offsets
     //0 +1000 -> 0 +20 scaling
-    offset_x = offset_y = offset_z = g.rc_6.control_in/50;  //debug
+    //offset_x = offset_y = offset_z = g.rc_6.control_in/50;  //créé pour debug
     
     /*cliSerial->printf_P(PSTR("offset_x = %d, offset_y = %d, offset_z = %d\n"),      //debug
         offset_x,
@@ -577,7 +587,7 @@ static void oa_move_map(int8_t scheduler_step)
         z_stop = OA_MAP_SIZE_Z;
     }
 
-    int test_map_1=0, test_map_move_pt=0;//debug
+    //int test_map_1=0, test_map_move_pt=0;//debug
     
     if(scheduler_step == 1){
         x = x_init;
@@ -795,7 +805,7 @@ static void oa_check_object_in_map(int8_t scheduler_step)
     float temp1, temp2;    //used to reduce the memory used
     float A_len, B_len, Pz_len, check_pitch_len, check_pitch_xy_len, Pz_case_3, Pz_case_4;
     float C_len;
-    
+    /*
     cliSerial->printf_P(PSTR("vel.x = %f, vel.y = %f, vel.z = %f\n"),      //debug
                                 vel.x,
                                 vel.y,
@@ -806,7 +816,7 @@ static void oa_check_object_in_map(int8_t scheduler_step)
                                 cos_Az,
                                 sin_Az,
                                 cos_Ay,
-                                sin_Ay);
+                                sin_Ay);*/
         
     // If no velocity, just exit as we don't know where to look at. Avoid division by 0 as well.
     if(vel.length()<OA_VEL_0){
@@ -986,12 +996,13 @@ FIN DE SUPPRESSION*/
                 if(cell_status[i][2]>0) object_detected = true;
             }
             
+            /*
             cliSerial->printf_P(PSTR("Cell_Status: i = %d, cell_status[i][0] = %d, cell_status[i][1] = %d, cell_status[i][2] = %d\n"),      //debug
             i,
             cell_status[i][0],
             cell_status[i][1],
             cell_status[i][2]);
-            
+            */
             
         } 
         safe_dist = (int)max(0, (check_pitch_len*(i-1)*OA_MAP_RES));  // cm  
